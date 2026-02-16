@@ -1,83 +1,80 @@
+grammar MyGrammar;
 
-// ------------------------
-// Parser rules
-// ------------------------
+// ========================================
+// PARSER RULES (lowercase)
+// ========================================
 
+// Top-level: a C program is a list of functions
 translation_unit
-    : external_declaration+
+    : function_definition+
     ;
 
-external_declaration
-    : function_definition
-    | declaration
-    ;
-
+// A function: return_type name() { statements }
 function_definition
-    : type_specifier declarator compound_statement
+    : type_specifier IDENTIFIER '(' ')' compound_statement
     ;
 
+// Types we support
 type_specifier
     : 'int'
-    | 'char'
-    | 'float'
-    | 'double'
     | 'void'
     ;
 
-declarator
-    : IDENTIFIER '(' ')'    // only simple functions with no args
-    ;
-
+// A block of code: { ... }
 compound_statement
-    : '{' block_item* '}'
+    : '{' statement* '}'
     ;
 
-block_item
-    : declaration
-    | statement
-    ;
-
-declaration
-    : type_specifier init_declarator_list ';'
-    ;
-
-init_declarator_list
-    : init_declarator (',' init_declarator)*
-    ;
-
-init_declarator
-    : IDENTIFIER ('=' CONSTANT)?
-    ;
-
+// Different kinds of statements
 statement
-    : expression_statement
-    | return_statement
+    : return_statement
+    | declaration_statement
+    | expression_statement
     ;
 
-expression_statement
-    : expression? ';'
-    ;
-
+// return 0;
 return_statement
     : 'return' expression? ';'
     ;
 
-expression
-    : IDENTIFIER '=' CONSTANT
+// int x;  or  int x = 5;
+declaration_statement
+    : type_specifier IDENTIFIER ('=' expression)? ';'
     ;
 
-// ------------------------
-// Lexer rules
-// ------------------------
+// Any expression followed by semicolon
+expression_statement
+    : expression? ';'
+    ;
+
+// Simple expressions (just numbers for now)
+expression
+    : NUMBER
+    | IDENTIFIER
+    ;
+
+// ========================================
+// LEXER RULES (UPPERCASE)
+// ========================================
 
 IDENTIFIER
     : [a-zA-Z_][a-zA-Z0-9_]*
     ;
 
-CONSTANT
+NUMBER
     : [0-9]+
     ;
 
+// Skip whitespace, tabs, newlines
 WS
     : [ \t\r\n]+ -> skip
+    ;
+
+// Skip comments
+COMMENT
+    : '//' ~[\r\n]* -> skip
+    ;
+
+BLOCK_COMMENT
+    : '/*' .*? '*/' -> skip
     ;
