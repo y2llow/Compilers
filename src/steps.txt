@@ -1,2 +1,5 @@
 1.1) we hebben een nieuwe grammer gemaakt voor de operators in 1.1
 1.2) we created 2 new files ast_nodes en ast_builder (Your job in ast_builder.py is to strip all that away and keep only the semantically meaningful structure. The rule is: if something doesn't affect what the code does, don't store it in the AST.) om de cst om te zetten naar een ast
+1.3) Created file constant_folder.py that does teh calculations of the side by side nodes
+1.4) added a ast.dot file with the AST tree for this we needed the dot_visitor.py file
+
