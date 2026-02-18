@@ -1,23 +1,31 @@
 import sys
+import argparse
 import antlr4
 
-from antlr_files.MyGrammarLexer import MyGrammarLexer
-from antlr_files.MyGrammarParser import MyGrammarParser
+from antlr_files.grammers.Operation_grammer.Operations_grammerLexer import Operations_grammerLexer
+from antlr_files.grammers.Operation_grammer.Operations_grammerParser import Operations_grammerParser
 from parser.ast_builder import ASTBuilder
+from parser.constant_folder import ConstantFolder
+
 
 def main():
-    if len(sys.argv) < 2:
-        print("Usage: python -m main <source_file.c>")
-        sys.exit(1)
+    arg_parser = argparse.ArgumentParser()
+    arg_parser.add_argument("source_file")
+    arg_parser.add_argument(
+        "--no-fold",
+        action="store_true",
+        help="Disable constant folding (useful for testing/debugging)"
+    )
+    args = arg_parser.parse_args()
 
-    input_stream = antlr4.FileStream(sys.argv[1])
+    input_stream = antlr4.FileStream(args.source_file)
 
     # Step 1: Lex
-    lexer = MyGrammarLexer(input_stream)
+    lexer = Operations_grammerLexer(input_stream)
     token_stream = antlr4.CommonTokenStream(lexer)
 
     # Step 2: Parse
-    parser = MyGrammarParser(token_stream)
+    parser = Operations_grammerParser(token_stream)
     tree = parser.translation_unit()
 
     if parser.getNumberOfSyntaxErrors() > 0:
@@ -25,11 +33,15 @@ def main():
         sys.exit(1)
 
     # Step 3: Build AST
-    builder = ASTBuilder()
-    ast = builder.visit(tree)
-
-    # Print the AST for debugging
+    ast = ASTBuilder().visit(tree)
+    print("=== AST before folding ===")
     print(ast)
+
+    # Step 4: Constant folding (pass --no-fold to skip)
+    ast = ConstantFolder(enabled=not args.no_fold).visit(ast)
+    print("\n=== AST after folding ===")
+    print(ast)
+
 
 if __name__ == '__main__':
     main()

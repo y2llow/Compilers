@@ -1,59 +1,76 @@
-from antlr_files.MyGrammarVisitor import MyGrammarVisitor
+from antlr_files.grammers.Operation_grammer.Operations_grammerVisitor import Operations_grammerVisitor
 from parser.ast_nodes import (
-    ProgramNode, FunctionNode, CompoundStatementNode,
-    ReturnStatementNode, DeclarationStatementNode,
-    NumberNode, IdentifierNode
+    ProgramNode,
+    IntLiteralNode,
+    UnaryOpNode,
+    BinaryOpNode,
 )
 
-class ASTBuilder(MyGrammarVisitor):
+
+class ASTBuilder(Operations_grammerVisitor):
     """
-    Visits the ANTLR parse tree and builds our AST.
-    Each visit method returns an AST node.
+    Walks the ANTLR Concrete Syntax Tree (CST) and builds our own AST.
+
+    One visit method per labelled alternative in the grammar (the # labels).
+    Each method returns an ASTNode — no ANTLR objects leak past this class.
     """
+
+    # ── Top level ────────────────────────────────────────────
 
     def visitTranslation_unit(self, ctx):
-        # Collect all function definitions
-        functions = [self.visit(f) for f in ctx.function_definition()]
-        return ProgramNode(functions)
+        # Each child pair is: expression ';'
+        # ctx.expression() returns the list of all expression sub-trees
+        expressions = [self.visit(expr) for expr in ctx.expression()]
+        return ProgramNode(expressions)
 
-    def visitFunction_definition(self, ctx):
-        return_type = ctx.type_specifier().getText()
-        name = ctx.IDENTIFIER().getText()
-        body = self.visit(ctx.compound_statement())
-        return FunctionNode(return_type, name, body)
+    # ── Literals ─────────────────────────────────────────────
 
-    def visitCompound_statement(self, ctx):
-        statements = [self.visit(s) for s in ctx.statement()]
-        return CompoundStatementNode(statements)
+    def visitIntLiteral(self, ctx):
+        return IntLiteralNode(int(ctx.INTEGER().getText()))
 
-    def visitStatement(self, ctx):
-        # A statement is one of three options, visit whichever child is present
-        if ctx.return_statement():
-            return self.visit(ctx.return_statement())
-        elif ctx.declaration_statement():
-            return self.visit(ctx.declaration_statement())
-        elif ctx.expression_statement():
-            return self.visit(ctx.expression_statement())
+    def visitLiteralExpr(self, ctx):
+        # expression : literal  ->  just pass through to visitIntLiteral etc.
+        return self.visit(ctx.literal())
 
-    def visitReturn_statement(self, ctx):
-        # expression is optional (e.g. 'return;' in void functions)
-        expr = self.visit(ctx.expression()) if ctx.expression() else None
-        return ReturnStatementNode(expr)
+    # ── Parentheses (just unwrap them — they don't appear in the AST) ────
 
-    def visitDeclaration_statement(self, ctx):
-        var_type = ctx.type_specifier().getText()
-        name = ctx.IDENTIFIER().getText()
-        value = self.visit(ctx.expression()) if ctx.expression() else None
-        return DeclarationStatementNode(var_type, name, value)
+    def visitParens(self, ctx):
+        return self.visit(ctx.expression())
 
-    def visitExpression_statement(self, ctx):
-        # For now just visit the expression if there is one
-        if ctx.expression():
-            return self.visit(ctx.expression())
-        return None
+    # ── Unary operators ──────────────────────────────────────
 
-    def visitExpression(self, ctx):
-        if ctx.NUMBER():
-            return NumberNode(ctx.NUMBER().getText())
-        elif ctx.IDENTIFIER():
-            return IdentifierNode(ctx.IDENTIFIER().getText())
+    def visitUnary(self, ctx):
+        op = ctx.getChild(0).getText()        # '+' or '-'
+        operand = self.visit(ctx.expression())
+        return UnaryOpNode(op, operand)
+
+    def visitLogicalNot(self, ctx):
+        operand = self.visit(ctx.expression())
+        return UnaryOpNode('!', operand)
+
+    def visitBitwiseNot(self, ctx):
+        operand = self.visit(ctx.expression())
+        return UnaryOpNode('~', operand)
+
+    # ── Binary operators ─────────────────────────────────────
+    # All binary rules have the same shape:
+    #   expression OP expression
+    # so we can use a small helper.
+
+    def _binary(self, ctx):
+        """Build a BinaryOpNode from any binary expression context."""
+        left  = self.visit(ctx.expression(0))
+        op    = ctx.getChild(1).getText()   # the operator token is always child index 1
+        right = self.visit(ctx.expression(1))
+        return BinaryOpNode(op, left, right)
+
+    def visitLogicalOr(self, ctx):   return self._binary(ctx)
+    def visitLogicalAnd(self, ctx):  return self._binary(ctx)
+    def visitBitwiseOr(self, ctx):   return self._binary(ctx)
+    def visitBitwiseXor(self, ctx):  return self._binary(ctx)
+    def visitBitwiseAnd(self, ctx):  return self._binary(ctx)
+    def visitEquality(self, ctx):    return self._binary(ctx)
+    def visitRelational(self, ctx):  return self._binary(ctx)
+    def visitShift(self, ctx):       return self._binary(ctx)
+    def visitAddSub(self, ctx):      return self._binary(ctx)
+    def visitMulDivMod(self, ctx):   return self._binary(ctx)

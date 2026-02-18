@@ -1,65 +1,77 @@
-# AST Node classes for our compiler
+# ============================================================
+# AST Node classes for the expression compiler
+# ============================================================
+# Design notes:
+#   - All nodes inherit from ASTNode (easy isinstance checks later)
+#   - No ANTLR types are used here — the AST is fully independent
+#   - Adding new node types = just add a new class below
+# ============================================================
+
 
 class ASTNode:
-    """Base class for all AST nodes"""
+    """Base class for all AST nodes."""
     pass
 
+
+# ── Program ──────────────────────────────────────────────────
+
 class ProgramNode(ASTNode):
-    """Represents the whole program (translation_unit)"""
-    def __init__(self, functions):
-        self.functions = functions  # list of FunctionNode
+    """Root node: holds a list of top-level expressions (one per semicolon)."""
+    def __init__(self, expressions: list):
+        self.expressions = expressions  # [ASTNode, ...]
 
     def __repr__(self):
-        return f"Program({self.functions})"
+        return f"Program({self.expressions})"
 
-class FunctionNode(ASTNode):
-    """Represents a function definition"""
-    def __init__(self, return_type, name, body):
-        self.return_type = return_type  # string: 'int' or 'void'
-        self.name = name                # string: function name
-        self.body = body                # CompoundStatementNode
 
-    def __repr__(self):
-        return f"Function({self.return_type} {self.name}, {self.body})"
+# ── Literals ─────────────────────────────────────────────────
 
-class CompoundStatementNode(ASTNode):
-    """Represents a block of statements { ... }"""
-    def __init__(self, statements):
-        self.statements = statements  # list of statement nodes
+class IntLiteralNode(ASTNode):
+    """An integer literal, e.g. 42."""
+    def __init__(self, value: int):
+        self.value = value
 
     def __repr__(self):
-        return f"Block({self.statements})"
+        return f"Int({self.value})"
 
-class ReturnStatementNode(ASTNode):
-    """Represents a return statement"""
-    def __init__(self, expression):
-        self.expression = expression  # can be None if 'return;'
 
-    def __repr__(self):
-        return f"Return({self.expression})"
+# Easy to add later:
+#   class FloatLiteralNode(ASTNode): ...
+#   class CharLiteralNode(ASTNode):  ...
 
-class DeclarationStatementNode(ASTNode):
-    """Represents a variable declaration: int x; or int x = 5;"""
-    def __init__(self, var_type, name, value):
-        self.var_type = var_type  # string: 'int'
-        self.name = name          # string: variable name
-        self.value = value        # expression node or None
 
-    def __repr__(self):
-        return f"Declaration({self.var_type} {self.name} = {self.value})"
+# ── Unary operations ─────────────────────────────────────────
 
-class NumberNode(ASTNode):
-    """Represents a number literal"""
-    def __init__(self, value):
-        self.value = int(value)
+class UnaryOpNode(ASTNode):
+    """
+    A unary operation.
+    op    : string, one of: '+', '-', '!', '~'
+    operand: ASTNode
+    """
+    def __init__(self, op: str, operand: ASTNode):
+        self.op = op
+        self.operand = operand
 
     def __repr__(self):
-        return f"Number({self.value})"
+        return f"UnaryOp({self.op}, {self.operand})"
 
-class IdentifierNode(ASTNode):
-    """Represents a variable reference"""
-    def __init__(self, name):
-        self.name = name
+
+# ── Binary operations ─────────────────────────────────────────
+
+class BinaryOpNode(ASTNode):
+    """
+    A binary operation.
+    op   : string, e.g. '+', '-', '*', '/', '%',
+                        '&&', '||', '==', '!=',
+                        '<', '>', '<=', '>=',
+                        '<<', '>>', '&', '|', '^'
+    left : ASTNode
+    right: ASTNode
+    """
+    def __init__(self, op: str, left: ASTNode, right: ASTNode):
+        self.op = op
+        self.left = left
+        self.right = right
 
     def __repr__(self):
-        return f"Identifier({self.name})"
+        return f"BinaryOp({self.left} {self.op} {self.right})"
