@@ -6,6 +6,7 @@ from antlr_files.grammers.Operation_grammer.Operations_grammerLexer import Opera
 from antlr_files.grammers.Operation_grammer.Operations_grammerParser import Operations_grammerParser
 from parser.ast_builder import ASTBuilder
 from parser.constant_folder import ConstantFolder
+from parser.dot_visitor import DotVisitor
 
 
 def main():
@@ -15,6 +16,11 @@ def main():
         "--no-fold",
         action="store_true",
         help="Disable constant folding (useful for testing/debugging)"
+    )
+    arg_parser.add_argument(
+        "--dot",
+        metavar="OUTPUT.dot",
+        help="Write the AST in Graphviz dot format to this file"
     )
     args = arg_parser.parse_args()
 
@@ -41,6 +47,15 @@ def main():
     ast = ConstantFolder(enabled=not args.no_fold).visit(ast)
     print("\n=== AST after folding ===")
     print(ast)
+
+    # Step 5: Graphviz dot output (pass --dot output.dot to enable)
+    if args.dot:
+        dot_string = DotVisitor().visit(ast)
+        with open(args.dot, "w") as f:
+            f.write(dot_string)
+        print(f"\nDot file written to: {args.dot}")
+        print(f"Visualise with:      xdot {args.dot}")
+        print(f"Export PNG with:     dot -Tpng {args.dot} -o ast.png")
 
 
 if __name__ == '__main__':
