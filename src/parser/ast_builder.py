@@ -1,5 +1,5 @@
-from antlr_files.grammers.Operation_grammer.Operations_grammerVisitor import Operations_grammerVisitor
-from parser.ast_nodes import (
+from src.antlr_files.grammers.Operation_grammer.Operations_grammerVisitor import Operations_grammerVisitor
+from src.parser.ast_nodes import (
     ProgramNode,
     IntLiteralNode,
     UnaryOpNode,

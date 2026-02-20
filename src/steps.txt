@@ -1,5 +1,21 @@
 1.1) we hebben een nieuwe grammer gemaakt voor de operators in 1.1
+-
 1.2) we created 2 new files ast_nodes en ast_builder (Your job in ast_builder.py is to strip all that away and keep only the semantically meaningful structure. The rule is: if something doesn't affect what the code does, don't store it in the AST.) om de cst om te zetten naar een ast
+-
 1.3) Created file constant_folder.py that does teh calculations of the side by side nodes
-1.4) added a ast.dot file with the AST tree for this we needed the dot_visitor.py file
+-
+1.4) added an ast.dot and dot_visitor file with the AST tree for this we needed the dot_visitor.py file
+ now by using the commands
+    1) python -m main antlr_files/example_source_files/int_operators.c --dot ast.dot
+    2)  xdot ast.dot
+ we can visualize our tree and if we don't want the constant folding we have to remove the (enabled=not) from
+ 48  ast = ConstantFolder(enabled=not args.no_fold).visit(ast)
+-
+-
+-
+2) Types and Variables
+
+
+
+
 

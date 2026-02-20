@@ -2,11 +2,11 @@ import sys
 import argparse
 import antlr4
 
-from antlr_files.grammers.Operation_grammer.Operations_grammerLexer import Operations_grammerLexer
-from antlr_files.grammers.Operation_grammer.Operations_grammerParser import Operations_grammerParser
-from parser.ast_builder import ASTBuilder
-from parser.constant_folder import ConstantFolder
-from parser.dot_visitor import DotVisitor
+from src.antlr_files.grammers.Operation_grammer.Operations_grammerLexer import Operations_grammerLexer
+from src.antlr_files.grammers.Operation_grammer.Operations_grammerParser import Operations_grammerParser
+from src.parser.ast_builder import ASTBuilder
+from src.parser.constant_folder import ConstantFolder
+from src.parser.dot_visitor import DotVisitor
 
 
 def main():

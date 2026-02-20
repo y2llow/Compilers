@@ -1,4 +1,4 @@
-from parser.ast_nodes import (
+from src.parser.ast_nodes import (
     ASTNode,
     ProgramNode,
     IntLiteralNode,
