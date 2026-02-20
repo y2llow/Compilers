@@ -1,9 +1,9 @@
-from antlr_files.grammers.Operation_grammer.Operations_grammerVisitor import Operations_grammerVisitor
-from antlr_files.grammers.Operation_grammer.Operations_grammerParser import Operations_grammerParser
+from antlr_files.grammers.CParser.CParserVisitor import CParserVisitor
+from antlr_files.grammers.CParser.CParserParser import CParserParser
 
 
-class MyCustomVisitor(Operations_grammerVisitor):
-    def visitStartRule(self, ctx: Operations_grammerParser.StartRuleContext):
+class MyCustomVisitor(CParserVisitor):
+    def visitStartRule(self, ctx: CParserParser.StartRuleContext):
         # Your custom logic here
         return self.visitChildren(ctx)
 

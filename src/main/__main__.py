@@ -2,8 +2,8 @@ import sys
 import argparse
 import antlr4
 
-from antlr_files.grammers.Operation_grammer.Operations_grammerLexer import Operations_grammerLexer
-from antlr_files.grammers.Operation_grammer.Operations_grammerParser import Operations_grammerParser
+from antlr_files.grammers.CParser.CParserLexer import CParserLexer
+from antlr_files.grammers.CParser.CParserParser import CParserParser
 from parser.ast_builder import ASTBuilder
 from parser.constant_folder import ConstantFolder
 from parser.dot_visitor import DotVisitor
@@ -27,11 +27,11 @@ def main():
     input_stream = antlr4.FileStream(args.source_file)
 
     # Step 1: Lex
-    lexer = Operations_grammerLexer(input_stream)
+    lexer = CParserLexer(input_stream)
     token_stream = antlr4.CommonTokenStream(lexer)
 
     # Step 2: Parse
-    parser = Operations_grammerParser(token_stream)
+    parser = CParserParser(token_stream)
     tree = parser.translation_unit()
 
     if parser.getNumberOfSyntaxErrors() > 0:
