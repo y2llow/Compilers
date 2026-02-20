@@ -15,21 +15,21 @@ translation_unit
 
 // Tier 1 (lowest precedence): logical OR
 expression
-    : expression '||' expression         # logicalOr
-    | expression '&&' expression         # logicalAnd
-    | expression '|'  expression         # bitwiseOr
-    | expression '^'  expression         # bitwiseXor
-    | expression '&'  expression         # bitwiseAnd
-    | expression ('==' | '!=') expression           # equality
-    | expression ('<' | '>' | '<=' | '>=') expression  # relational
-    | expression ('<<' | '>>') expression            # shift
-    | expression ('+' | '-') expression              # addSub
-    | expression ('*' | '/' | '%') expression        # mulDivMod
-    | '!' expression                     # logicalNot
-    | '~' expression                     # bitwiseNot
-    | ('+' | '-') expression             # unary
-    | '(' expression ')'                 # parens
-    | literal                            # literalExpr
+    : expression ('*' | '/' | '%') expression        # mulDivMod
+    | expression ('+' | '-') expression               # addSub
+    | expression ('<<' | '>>') expression             # shift
+    | expression ('<' | '>' | '<=' | '>=') expression # relational
+    | expression ('==' | '!=') expression             # equality
+    | expression '&'  expression                      # bitwiseAnd
+    | expression '^'  expression                      # bitwiseXor
+    | expression '|'  expression                      # bitwiseOr
+    | expression '&&' expression                      # logicalAnd
+    | expression '||' expression                      # logicalOr
+    | '!' expression                                  # logicalNot
+    | '~' expression                                  # bitwiseNot
+    | ('+' | '-') expression                          # unary
+    | '(' expression ')'                              # parens
+    | literal                                         # literalExpr
     ;
 
 // A literal (only int for now, easy to add float/char/string later)
