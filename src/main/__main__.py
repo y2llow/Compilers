@@ -7,6 +7,7 @@ from antlr_files.grammers.CParser.CParserParser import CParserParser
 from parser.ast_builder import ASTBuilder
 from parser.constant_folder import ConstantFolder
 from parser.dot_visitor import DotVisitor
+from parser.error_handler import SyntaxErrorListener, RED, RESET
 
 
 def main():
@@ -24,6 +25,10 @@ def main():
     )
     args = arg_parser.parse_args()
 
+    # Read source file for error reporting
+    with open(args.source_file, 'r') as f:
+        source_lines = f.readlines()
+
     input_stream = antlr4.FileStream(args.source_file)
 
     # Step 1: Lex
@@ -32,10 +37,20 @@ def main():
 
     # Step 2: Parse
     parser = CParserParser(token_stream)
+
+    # Setup error listener for nice error messages
+    error_listener = SyntaxErrorListener(source_lines)
+    lexer.removeErrorListeners()
+    lexer.addErrorListener(error_listener)
+    parser.removeErrorListeners()
+    parser.addErrorListener(error_listener)
+
     tree = parser.translation_unit()
 
-    if parser.getNumberOfSyntaxErrors() > 0:
-        print("Syntax errors found, stopping.")
+    # Check for syntax errors
+    if error_listener.has_errors():
+        print(error_listener.format_errors())
+        print(f"{RED}Compilation failed with {len(error_listener.errors)} syntax error(s).{RESET}")
         sys.exit(1)
 
     # Step 3: Build AST
