@@ -49,8 +49,9 @@ def main():
 
     # Check for syntax errors
     if error_listener.has_errors():
-        print(error_listener.format_errors())
-        print(f"{RED}Compilation failed with {len(error_listener.errors)} syntax error(s).{RESET}")
+        formatted_output, error_count = error_listener.format_errors()
+        print(formatted_output)
+        print(f"{RED}Compilation failed with {error_count} syntax error(s).{RESET}")
         sys.exit(1)
 
     # Step 3: Build AST
@@ -58,7 +59,7 @@ def main():
     print("=== AST before folding ===")
     print(ast)
 
-    # Step 4: Constant folding (pass --no-fold to skip)
+    # Step 4: Constant folding (pass --no-fold ,to skip)
     ast = ConstantFolder(enabled=not args.no_fold).visit(ast)
     print("\n=== AST after folding ===")
     print(ast)
