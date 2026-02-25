@@ -1,0 +1,202 @@
+🧠 Step 1 — Design Your Symbol Table
+
+You need a data structure to store:
+
+Variable name
+
+Type
+
+Is it const?
+
+Scope
+
+Simple Python Implementation
+
+Start simple:
+
+class Symbol:
+    def __init__(self, name, type_, is_const=False):
+        self.name = name
+        self.type = type_
+        self.is_const = is_const
+
+Now a symbol table with scopes:
+
+class SymbolTable:
+    def __init__(self):
+        self.scopes = [{}]   # list of dictionaries (stack)
+
+    def enter_scope(self):
+        self.scopes.append({})
+
+    def exit_scope(self):
+        self.scopes.pop()
+
+    def declare(self, symbol):
+        current_scope = self.scopes[-1]
+        if symbol.name in current_scope:
+            return False  # redeclaration error
+        current_scope[symbol.name] = symbol
+        return True
+
+    def lookup(self, name):
+        for scope in reversed(self.scopes):
+            if name in scope:
+                return scope[name]
+        return None
+
+Even if you only have global scope now,
+write it this way so it works later.
+
+🧭 Step 2 — Implement a Semantic Visitor
+
+You probably already have AST node classes like:
+
+Program
+
+VariableDeclaration
+
+Assignment
+
+BinaryExpression
+
+Identifier
+
+Literal
+
+Now create:
+
+class SemanticVisitor:
+    def __init__(self):
+        self.symbol_table = SymbolTable()
+        self.errors = []
+🚨 Error Reporting Function
+
+Centralize error reporting:
+
+def error(self, line, pos, message):
+    self.errors.append(
+        f"[ Error ] line {line}, position {pos}: {message}"
+    )
+🔍 Step 3 — Check Each Required Error
+
+Let’s go one by one.
+
+1️⃣ Undeclared Variable
+
+Example:
+
+x = 5;
+
+but x was never declared.
+
+In your Identifier visit:
+
+def visit_Identifier(self, node):
+    symbol = self.symbol_table.lookup(node.name)
+    if symbol is None:
+        self.error(node.line, node.pos,
+                   f"use of undeclared variable {node.name}")
+    return symbol
+2️⃣ Redeclaration
+
+Example:
+
+int x;
+int x;  // error
+
+In VariableDeclaration visit:
+
+def visit_VariableDeclaration(self, node):
+    symbol = Symbol(node.name, node.type, node.is_const)
+
+    if not self.symbol_table.declare(symbol):
+        self.error(node.line, node.pos,
+                   f"redeclaration of variable {node.name}")
+3️⃣ Type Mismatch (Very Important)
+
+Example:
+
+int x;
+x = 3.14;   // error if no implicit conversion
+
+In Assignment visit:
+
+def visit_Assignment(self, node):
+    left_symbol = self.visit(node.left)
+    right_type = self.visit(node.right)
+
+    if left_symbol and right_type:
+        if left_symbol.type != right_type:
+            self.error(node.line, node.pos,
+                       f"variable {left_symbol.name} has type "
+                       f"{left_symbol.type} while it should be {right_type}")
+
+You must design your expression visits to return a type.
+
+Example:
+
+def visit_Literal(self, node):
+    return node.type
+def visit_BinaryExpression(self, node):
+    left_type = self.visit(node.left)
+    right_type = self.visit(node.right)
+
+    if left_type != right_type:
+        self.error(node.line, node.pos,
+                   "incompatible types in binary operation")
+        return None
+
+    return left_type
+4️⃣ Assignment to rvalue
+
+Example:
+
+5 = x;   // illegal
+
+Left side must be assignable (an lvalue).
+
+Check:
+
+if not isinstance(node.left, Identifier):
+    self.error(node.line, node.pos,
+               "left side of assignment is not assignable")
+5️⃣ Assignment to const
+
+Example:
+
+const int x = 5;
+x = 7;  // error
+
+In Assignment:
+
+if left_symbol.is_const:
+    self.error(node.line, node.pos,
+               f"cannot assign to const variable {left_symbol.name}")
+🏗 Recommended Order to Implement
+
+Here’s the safest order:
+
+Step 1
+
+Implement symbol table.
+
+Step 2
+
+Implement visitor that only:
+
+Declares variables
+
+Detects undeclared variables
+
+Test it.
+
+Step 3
+
+Add type checking.
+
+Test again.
+
+Step 4
+
+Add const + rvalue checks.
