@@ -8,6 +8,7 @@ from parser.ast_builder import ASTBuilder
 from parser.constant_folder import ConstantFolder
 from parser.dot_visitor import DotVisitor
 from parser.error_handler import SyntaxErrorListener, RED, RESET
+from parser.semantics.semantic_analyser import SemanticAnalyzer
 
 
 def main():
@@ -56,29 +57,43 @@ def main():
 
     # Step 3: Build AST
     ast = ASTBuilder().visit(tree)
-    print("=== AST before folding ===")
+    print("=== AST before semantic analysis ===")
     print(ast)
+    print()
 
-    # NIEUW: Step 3.5: Semantic Analysis
-    from parser.semantics.semantic_analyser import SemanticAnalyzer
+    # Step 3.5: Semantic Analysis
+    print("=== Semantic Analysis ===")
     analyzer = SemanticAnalyzer()
-    analyzer.visit(ast)
+    analyzer.analyze(ast)
+
+    # Print semantic errors
     if analyzer.errors:
-        for error in analyzer.errors:
-            print(error)
+        error_output, error_count = analyzer.format_errors()
+        print(error_output)
+        print(f"{RED}Compilation failed with {error_count} semantic error(s).{RESET}")
         sys.exit(1)
 
-    # Step 4: Constant folding (pass --no-fold ,to skip)
+    # Print semantic warnings
+    if analyzer.warnings:
+        warning_output, warning_count = analyzer.format_warnings()
+        print(warning_output)
+
+    if not analyzer.errors:
+        print(f"Semantic analysis passed ✓")
+    print()
+
+    # Step 4: Constant folding (pass --no-fold to skip)
     ast = ConstantFolder(enabled=not args.no_fold).visit(ast)
-    print("\n=== AST after folding ===")
+    print("=== AST after folding ===")
     print(ast)
+    print()
 
     # Step 5: Graphviz dot output (pass --dot output.dot to enable)
     if args.dot:
         dot_string = DotVisitor().visit(ast)
         with open(args.dot, "w") as f:
             f.write(dot_string)
-        print(f"\nDot file written to: {args.dot}")
+        print(f"Dot file written to: {args.dot}")
         print(f"Visualise with:      xdot {args.dot}")
         print(f"Export PNG with:     dot -Tpng {args.dot} -o ast.png")
 

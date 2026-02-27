@@ -23,7 +23,23 @@ class ASTBuilder(CParserVisitor):
     Walks the ANTLR Concrete Syntax Tree (CST) and builds our own AST.
     One visit method per labelled alternative in the grammar (the # labels).
     Each method returns an ASTNode — no ANTLR objects leak past this class.
+
+    Now also includes line and column information for error reporting.
     """
+
+    def _get_line_col(self, ctx):
+        """Extract line and column from ANTLR context"""
+        if hasattr(ctx, 'start'):
+            return ctx.start.line, ctx.start.column
+        return 0, 0
+
+    def _attach_position(self, node, ctx):
+        """Attach line and column to AST node"""
+        if node is not None:
+            line, col = self._get_line_col(ctx)
+            node.line = line
+            node.column = col
+        return node
 
     # ── Top level ─────────────────────────────────────────────
 
@@ -60,35 +76,57 @@ class ASTBuilder(CParserVisitor):
         # Check if there is an initializer (the '=' expression part)
         value = self.visit(ctx.expression()) if ctx.expression() else None
 
-        return VarDeclNode(is_const, type_name, pointer_depth, name, value)
+        node = VarDeclNode(is_const, type_name, pointer_depth, name, value)
+        return self._attach_position(node, ctx)
 
     # ── Assignment ────────────────────────────────────────────
 
     def visitAssignment(self, ctx):
         # unary_expr '=' expression
         target = self.visit(ctx.unary_expr())
-        value  = self.visit(ctx.expression())
-        return AssignNode(target, value)
+        value = self.visit(ctx.expression())
+        node = AssignNode(target, value)
+        return self._attach_position(node, ctx)
 
     # ── Expressions ───────────────────────────────────────────
 
     def _binary(self, ctx):
         """Build a BinaryOpNode from any binary expression context."""
-        left  = self.visit(ctx.expression(0))
-        op    = ctx.getChild(1).getText()
+        left = self.visit(ctx.expression(0))
+        op = ctx.getChild(1).getText()
         right = self.visit(ctx.expression(1))
-        return BinaryOpNode(op, left, right)
+        node = BinaryOpNode(op, left, right)
+        return self._attach_position(node, ctx)
 
-    def visitMulDivMod(self, ctx):  return self._binary(ctx)
-    def visitAddSub(self, ctx):     return self._binary(ctx)
-    def visitShift(self, ctx):      return self._binary(ctx)
-    def visitRelational(self, ctx): return self._binary(ctx)
-    def visitEquality(self, ctx):   return self._binary(ctx)
-    def visitBitwiseAnd(self, ctx): return self._binary(ctx)
-    def visitBitwiseXor(self, ctx): return self._binary(ctx)
-    def visitBitwiseOr(self, ctx):  return self._binary(ctx)
-    def visitLogicalAnd(self, ctx): return self._binary(ctx)
-    def visitLogicalOr(self, ctx):  return self._binary(ctx)
+    def visitMulDivMod(self, ctx):
+        return self._binary(ctx)
+
+    def visitAddSub(self, ctx):
+        return self._binary(ctx)
+
+    def visitShift(self, ctx):
+        return self._binary(ctx)
+
+    def visitRelational(self, ctx):
+        return self._binary(ctx)
+
+    def visitEquality(self, ctx):
+        return self._binary(ctx)
+
+    def visitBitwiseAnd(self, ctx):
+        return self._binary(ctx)
+
+    def visitBitwiseXor(self, ctx):
+        return self._binary(ctx)
+
+    def visitBitwiseOr(self, ctx):
+        return self._binary(ctx)
+
+    def visitLogicalAnd(self, ctx):
+        return self._binary(ctx)
+
+    def visitLogicalOr(self, ctx):
+        return self._binary(ctx)
 
     def visitUnaryExpr(self, ctx):
         # Just pass through to the unary_expr rule
@@ -97,36 +135,44 @@ class ASTBuilder(CParserVisitor):
     # ── Unary expressions ─────────────────────────────────────
 
     def visitLogicalNot(self, ctx):
-        return UnaryOpNode('!', self.visit(ctx.unary_expr()))
+        node = UnaryOpNode('!', self.visit(ctx.unary_expr()))
+        return self._attach_position(node, ctx)
 
     def visitBitwiseNot(self, ctx):
-        return UnaryOpNode('~', self.visit(ctx.unary_expr()))
+        node = UnaryOpNode('~', self.visit(ctx.unary_expr()))
+        return self._attach_position(node, ctx)
 
     def visitUnaryPlusMinus(self, ctx):
-        op      = ctx.getChild(0).getText()  # '+' or '-'
+        op = ctx.getChild(0).getText()  # '+' or '-'
         operand = self.visit(ctx.unary_expr())
-        return UnaryOpNode(op, operand)
+        node = UnaryOpNode(op, operand)
+        return self._attach_position(node, ctx)
 
     def visitDereference(self, ctx):
-        return DereferenceNode(self.visit(ctx.unary_expr()))
+        node = DereferenceNode(self.visit(ctx.unary_expr()))
+        return self._attach_position(node, ctx)
 
     def visitAddressOf(self, ctx):
-        return AddressOfNode(self.visit(ctx.unary_expr()))
+        node = AddressOfNode(self.visit(ctx.unary_expr()))
+        return self._attach_position(node, ctx)
 
     def visitPrefixIncrement(self, ctx):
-        return IncrementNode(self.visit(ctx.unary_expr()), prefix=True)
+        node = IncrementNode(self.visit(ctx.unary_expr()), prefix=True)
+        return self._attach_position(node, ctx)
 
     def visitPrefixDecrement(self, ctx):
-        return DecrementNode(self.visit(ctx.unary_expr()), prefix=True)
+        node = DecrementNode(self.visit(ctx.unary_expr()), prefix=True)
+        return self._attach_position(node, ctx)
 
     def visitCast(self, ctx):
-        type_name     = ctx.type_spec().getText()
+        type_name = ctx.type_spec().getText()
         pointer_depth = sum(
             1 for i in range(ctx.getChildCount())
             if ctx.getChild(i).getText() == '*'
         )
         operand = self.visit(ctx.unary_expr())
-        return CastNode(type_name, pointer_depth, operand)
+        node = CastNode(type_name, pointer_depth, operand)
+        return self._attach_position(node, ctx)
 
     def visitPostfixExprRule(self, ctx):
         # Just pass through to postfix_expr
@@ -135,10 +181,12 @@ class ASTBuilder(CParserVisitor):
     # ── Postfix expressions ───────────────────────────────────
 
     def visitPostfixIncrement(self, ctx):
-        return IncrementNode(self.visit(ctx.primary_expr()), prefix=False)
+        node = IncrementNode(self.visit(ctx.primary_expr()), prefix=False)
+        return self._attach_position(node, ctx)
 
     def visitPostfixDecrement(self, ctx):
-        return DecrementNode(self.visit(ctx.primary_expr()), prefix=False)
+        node = DecrementNode(self.visit(ctx.primary_expr()), prefix=False)
+        return self._attach_position(node, ctx)
 
     def visitPrimaryExprRule(self, ctx):
         # Just pass through to primary_expr
@@ -154,17 +202,21 @@ class ASTBuilder(CParserVisitor):
         return self.visit(ctx.literal())
 
     def visitIdentifierExpr(self, ctx):
-        return IdentifierNode(ctx.IDENTIFIER().getText())
+        node = IdentifierNode(ctx.IDENTIFIER().getText())
+        return self._attach_position(node, ctx)
 
     # ── Literals ──────────────────────────────────────────────
 
     def visitIntLiteral(self, ctx):
-        return IntLiteralNode(int(ctx.INTEGER().getText()))
+        node = IntLiteralNode(int(ctx.INTEGER().getText()))
+        return self._attach_position(node, ctx)
 
     def visitFloatLiteral(self, ctx):
-        return FloatLiteralNode(float(ctx.FLOAT_LIT().getText()))
+        node = FloatLiteralNode(float(ctx.FLOAT_LIT().getText()))
+        return self._attach_position(node, ctx)
 
     def visitCharLiteral(self, ctx):
         # Strip the surrounding quotes: 'a' -> a
         raw = ctx.CHAR_LIT().getText()
-        return CharLiteralNode(raw[1:-1])
+        node = CharLiteralNode(raw[1:-1])
+        return self._attach_position(node, ctx)
