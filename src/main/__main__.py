@@ -59,6 +59,15 @@ def main():
     print("=== AST before folding ===")
     print(ast)
 
+    # NIEUW: Step 3.5: Semantic Analysis
+    from parser.semantics.semantic_analyser import SemanticAnalyzer
+    analyzer = SemanticAnalyzer()
+    analyzer.visit(ast)
+    if analyzer.errors:
+        for error in analyzer.errors:
+            print(error)
+        sys.exit(1)
+
     # Step 4: Constant folding (pass --no-fold ,to skip)
     ast = ConstantFolder(enabled=not args.no_fold).visit(ast)
     print("\n=== AST after folding ===")
