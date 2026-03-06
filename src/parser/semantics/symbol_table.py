@@ -5,18 +5,20 @@
 class Symbol:
     """Eén symbool in de tabel"""
 
-    def __init__(self, name, type_name, pointer_depth=0, is_const=False, line=0, column=0):
+    def __init__(self, name, type_name, pointer_depth=0, is_const=False, line=0, column=0, array_dimensions=None):
         self.name = name
         self.type_name = type_name  # 'int', 'float', 'char'
         self.pointer_depth = pointer_depth  # 0, 1, 2, ...
         self.is_const = is_const
         self.line = line  # For error reporting: waar is dit gedeclareerd
         self.column = column
+        self.array_dimensions = array_dimensions if array_dimensions else []  # array dimensions
 
     def __repr__(self):
         const = "const " if self.is_const else ""
         stars = '*' * self.pointer_depth
-        return f"Symbol({const}{self.type_name}{stars} {self.name})"
+        dims = ''.join([f'[{d}]' for d in self.array_dimensions])
+        return f"Symbol({const}{self.type_name}{stars} {self.name}{dims})"
 
 
 class SymbolTable:
@@ -38,7 +40,7 @@ class SymbolTable:
             self.scopes.pop()
             self.current_scope_level -= 1
 
-    def add_symbol(self, name, type_name, pointer_depth=0, is_const=False, line=0, column=0):
+    def add_symbol(self, name, type_name, pointer_depth=0, is_const=False, line=0, column=0, array_dimensions=None):
         """
         Voeg een nieuwe variabele toe aan de huidige scope.
         Retourneert (True, None) als succes.
@@ -50,14 +52,14 @@ class SymbolTable:
         if name in current_scope:
             return False, current_scope[name]
 
-        # Voeg toe aan huidige scope
-        symbol = Symbol(name, type_name, pointer_depth, is_const, line, column)
+        # Voeg toe aan huidge scope
+        symbol = Symbol(name, type_name, pointer_depth, is_const, line, column, array_dimensions)
         current_scope[name] = symbol
         return True, None
 
     def lookup(self, name):
         """
-        Zoek een variabele op, startend van huidige scope en omhoog.
+        Zoek een variabele op, startend van huidge scope en omhoog.
         Retourneert Symbol object of None.
         """
         # Search from innermost (current) scope to outermost (global)
@@ -68,7 +70,7 @@ class SymbolTable:
 
     def lookup_in_current_scope_only(self, name):
         """
-        Zoek een variabele op alleen in de huidige scope (niet in parent scopes).
+        Zoek een variabele op alleen in de huidge scope (niet in parent scopes).
         Gebruikt voor het detecteren van redeclaratie.
         """
         return self.scopes[self.current_scope_level].get(name)

@@ -20,6 +20,8 @@ class SemanticAnalyzer:
     3. Incompatibele type operaties/toewijzingen
     4. Toewijzing aan rvalue
     5. Toewijzing aan const variabelen
+    6. Array index type (moet int zijn)
+    7. Array initializer length matching
     """
 
     # Type compatibility table
@@ -115,7 +117,8 @@ class SemanticAnalyzer:
             node.pointer_depth,
             node.is_const,
             line=getattr(node, 'line', 0),
-            column=getattr(node, 'column', 0)
+            column=getattr(node, 'column', 0),
+            array_dimensions=node.array_dimensions  # NEW: pass array dims
         )
 
         if not success:
@@ -128,15 +131,57 @@ class SemanticAnalyzer:
 
         # Check de initializer expressie (als aanwezig)
         if node.value is not None:
-            value_type = self._get_expression_type(node.value)
+            # Handle array initializers
+            if isinstance(node.value, ArrayInitializerNode):
+                self._check_array_initializer(node, node.value)
+            else:
+                value_type = self._get_expression_type(node.value)
 
-            # Check type compatibiliteit
-            if value_type is not None and success:  # Alleen als geen redeclaratie
-                self._check_type_assignment(
-                    target_type=(node.type_name, node.pointer_depth),
-                    value_type=value_type,
-                    target_name=node.name,
-                    node=node
+                # Check type compatibiliteit
+                if value_type is not None and success:  # Alleen als geen redeclaratie
+                    self._check_type_assignment(
+                        target_type=(node.type_name, node.pointer_depth),
+                        value_type=value_type,
+                        target_name=node.name,
+                        node=node
+                    )
+
+    def _check_array_initializer(self, var_decl, initializer):
+        """
+        Check array initializer:
+        - Size moet matchen met array declaration
+        - Elements moeten correct type zijn
+        """
+        if not var_decl.array_dimensions:
+            self.add_error(
+                getattr(initializer, 'line', 0),
+                getattr(initializer, 'column', 0),
+                f"Error: array initializer for non-array variable '{var_decl.name}'"
+            )
+            return
+
+        # Check eerste dimensie
+        expected_size = var_decl.array_dimensions[0]
+        actual_size = len(initializer.elements)
+
+        if actual_size != expected_size:
+            self.add_error(
+                getattr(initializer, 'line', 0),
+                getattr(initializer, 'column', 0),
+                f"Error: array initializer size mismatch for '{var_decl.name}': expected {expected_size}, got {actual_size}"
+            )
+
+        # TODO: Check multidimensional array initializers
+        # For now, just check that all elements are literals
+        for elem in initializer.elements:
+            if isinstance(elem, ArrayInitializerNode):
+                # Nested initializer for multidimensional arrays
+                pass
+            elif not isinstance(elem, (IntLiteralNode, FloatLiteralNode, CharLiteralNode)):
+                self.add_warning(
+                    getattr(elem, 'line', 0),
+                    getattr(elem, 'column', 0),
+                    f"Warning: array initializer contains non-literal element"
                 )
 
     def visit_AssignNode(self, node):
@@ -210,6 +255,38 @@ class SemanticAnalyzer:
         # Maar we kunnen een warning geven
         self._check_expression(node.operand)
 
+    def visit_ArrayAccessNode(self, node):
+        """Bezoek array access: arr[index]"""
+        # Check dat het array is
+        array_type = self._get_expression_type(node.array)
+        if array_type is not None:
+            base_type, ptr_depth, is_array = array_type if len(array_type) > 2 else (*array_type, False)
+            if not is_array and ptr_depth == 0:
+                self.add_error(
+                    getattr(node, 'line', 0),
+                    getattr(node, 'column', 0),
+                    f"Error: subscript applied to non-array/pointer type"
+                )
+
+        # Check dat index int is
+        index_type = self._get_expression_type(node.index)
+        if index_type is not None:
+            base_type, ptr_depth = index_type
+            if base_type != 'int' or ptr_depth > 0:
+                self.add_error(
+                    getattr(node.index, 'line', 0),
+                    getattr(node.index, 'column', 0),
+                    f"Error: array subscript is not an integer"
+                )
+
+        self._check_expression(node.array)
+        self._check_expression(node.index)
+
+    def visit_ArrayInitializerNode(self, node):
+        """Bezoek array initializer"""
+        for elem in node.elements:
+            self._check_expression(elem)
+
     # ── Type Checking Methods ─────────────────────────────────
 
     def _get_expression_type(self, node):
@@ -238,14 +315,31 @@ class SemanticAnalyzer:
             symbol = self.symbol_table.lookup(node.name)
             if symbol is None:
                 return None
+            # Return array info if applicable
+            if symbol.array_dimensions:
+                return (symbol.type_name, symbol.pointer_depth, True)
             return (symbol.type_name, symbol.pointer_depth)
+
+        elif isinstance(node, ArrayAccessNode):
+            # arr[i] has type of base array element
+            array_type = self._get_expression_type(node.array)
+            if array_type is None:
+                return None
+            if len(array_type) > 2 and array_type[2]:  # is_array
+                # Strip one dimension
+                return (array_type[0], array_type[1])
+            # If it's a pointer, dereference it
+            base_type, ptr_depth = array_type[0], array_type[1]
+            if ptr_depth > 0:
+                return (base_type, ptr_depth - 1)
+            return None
 
         elif isinstance(node, DereferenceNode):
             # *ptr: als ptr is int*, dan type is int
             inner_type = self._get_expression_type(node.operand)
             if inner_type is None:
                 return None
-            base_type, ptr_depth = inner_type
+            base_type, ptr_depth = inner_type[0], inner_type[1]
             if ptr_depth > 0:
                 return (base_type, ptr_depth - 1)
             return None
@@ -255,7 +349,7 @@ class SemanticAnalyzer:
             inner_type = self._get_expression_type(node.operand)
             if inner_type is None:
                 return None
-            base_type, ptr_depth = inner_type
+            base_type, ptr_depth = inner_type[0], inner_type[1]
             return (base_type, ptr_depth + 1)
 
         elif isinstance(node, CastNode):
@@ -284,8 +378,8 @@ class SemanticAnalyzer:
         if left_type is None or right_type is None:
             return None
 
-        left_base, left_ptr = left_type
-        right_base, right_ptr = right_type
+        left_base, left_ptr = left_type[0], left_type[1]
+        right_base, right_ptr = right_type[0], right_type[1]
 
         # Pointers kunnen niet gearithmetiseerd worden
         if left_ptr > 0 or right_ptr > 0:
@@ -306,11 +400,23 @@ class SemanticAnalyzer:
                 return None
             return (symbol.type_name, symbol.pointer_depth)
 
+        elif isinstance(node, ArrayAccessNode):
+            # arr[i] = value; — type is base element type
+            array_type = self._get_expression_type(node.array)
+            if array_type is None:
+                return None
+            if len(array_type) > 2 and array_type[2]:  # is_array
+                return (array_type[0], array_type[1])
+            base_type, ptr_depth = array_type[0], array_type[1]
+            if ptr_depth > 0:
+                return (base_type, ptr_depth - 1)
+            return None
+
         elif isinstance(node, DereferenceNode):
             inner_type = self._get_expression_type(node.operand)
             if inner_type is None:
                 return None
-            base_type, ptr_depth = inner_type
+            base_type, ptr_depth = inner_type[0], inner_type[1]
             if ptr_depth > 0:
                 return (base_type, ptr_depth - 1)
             return None
@@ -324,8 +430,8 @@ class SemanticAnalyzer:
         target_type: (type_name, pointer_depth) waar we naar toewijzen
         value_type: (type_name, pointer_depth) wat we toewijzen
         """
-        target_base, target_ptr = target_type
-        value_base, value_ptr = value_type
+        target_base, target_ptr = target_type[0], target_type[1]
+        value_base, value_ptr = value_type[0], value_type[1]
 
         # Pointer assignments
         if target_ptr > 0 or value_ptr > 0:
@@ -341,8 +447,8 @@ class SemanticAnalyzer:
 
     def _check_pointer_assignment(self, target_type, value_type, target_name, node):
         """Check pointer-to-pointer assignments"""
-        target_base, target_ptr = target_type
-        value_base, value_ptr = value_type
+        target_base, target_ptr = target_type[0], target_type[1]
+        value_base, value_ptr = value_type[0], value_type[1]
 
         # void* kan naar alles
         if value_base == 'void':
@@ -394,8 +500,8 @@ class SemanticAnalyzer:
 
     def _check_binary_operation(self, op, left_type, right_type, node):
         """Check binary operatie type compatibiliteit"""
-        left_base, left_ptr = left_type
-        right_base, right_ptr = right_type
+        left_base, left_ptr = left_type[0], left_type[1]
+        right_base, right_ptr = right_type[0], right_type[1]
 
         # Pointers kunnen niet gearithmetiseerd worden (behalve somige operaties)
         if left_ptr > 0 or right_ptr > 0:
@@ -438,6 +544,9 @@ class SemanticAnalyzer:
             self._check_expression(node.operand)
         elif isinstance(node, CastNode):
             self._check_expression(node.operand)
+        elif isinstance(node, ArrayAccessNode):
+            self._check_expression(node.array)
+            self._check_expression(node.index)
         elif isinstance(node, AssignNode):
             # Toewijzing als expressie (zoals in C mogelijk)
             self._check_lvalue(node.target)
@@ -486,8 +595,13 @@ class SemanticAnalyzer:
                     f"Error: cannot assign to const variable '{node.name}'"
                 )
 
+        elif isinstance(node, ArrayAccessNode):
+            # arr[i] is an lvalue, but we need to check both parts
+            self._check_expression(node.array)
+            self._check_expression(node.index)
+
         elif isinstance(node, DereferenceNode):
-            # Dereference kan lvalue zijn, maar we moeten de operand checken
+            # Dereference kann lvalue sein, aber we moeten the operand checken
             self._check_expression(node.operand)
 
         elif isinstance(node, (IntLiteralNode, FloatLiteralNode, CharLiteralNode)):
@@ -530,6 +644,8 @@ class SemanticAnalyzer:
             return node.name
         elif isinstance(node, DereferenceNode):
             return f"*{self._node_to_string(node.operand)}"
+        elif isinstance(node, ArrayAccessNode):
+            return f"{self._node_to_string(node.array)}[{self._node_to_string(node.index)}]"
         elif isinstance(node, IntLiteralNode):
             return str(node.value)
         elif isinstance(node, FloatLiteralNode):

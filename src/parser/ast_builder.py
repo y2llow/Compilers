@@ -15,16 +15,15 @@ from parser.ast_nodes import (
     IncrementNode,
     DecrementNode,
     CastNode,
+    ArrayAccessNode,
+    ArrayInitializerNode,
 )
 
 
 class ASTBuilder(CParserVisitor):
     """
     Walks the ANTLR Concrete Syntax Tree (CST) and builds our own AST.
-    One visit method per labelled alternative in the grammar (the # labels).
-    Each method returns an ASTNode — no ANTLR objects leak past this class.
-
-    Now also includes line and column information for error reporting.
+    Updated to handle the new grammar with var_initializer.
     """
 
     def _get_line_col(self, ctx):
@@ -47,21 +46,29 @@ class ASTBuilder(CParserVisitor):
         return ProgramNode(self.visit(ctx.main_function()))
 
     def visitMain_function(self, ctx):
-        # ctx.statement() returns the list of all statements inside main
         statements = [self.visit(stmt) for stmt in ctx.statement()]
         return MainFunctionNode(statements)
 
     # ── Statements ────────────────────────────────────────────
 
     def visitStatement(self, ctx):
-        # A statement is one of: var_decl, assignment, expression
+        # A statement can be var_decl, assignment, return_statement, or expression
         # Just pass through to the correct child
         return self.visit(ctx.getChild(0))
+
+    def visitReturn_statement(self, ctx):
+        # return_statement: 'return' expression? ';'
+        expr = None
+        if ctx.expression():
+            expr = self.visit(ctx.expression())
+        # For now, we'll just return the expression (or None)
+        # You might want to create a ReturnNode later
+        return expr
 
     # ── Variable declaration ───────────────────────────────────
 
     def visitVar_decl(self, ctx):
-        # CONST? type_spec '*'* IDENTIFIER ('=' expression)?
+        # CONST? type_spec '*'* IDENTIFIER array_dimension* ('=' var_initializer)?
         is_const = ctx.CONST() is not None
         type_name = ctx.type_spec().getText()
 
@@ -73,17 +80,58 @@ class ASTBuilder(CParserVisitor):
 
         name = ctx.IDENTIFIER().getText()
 
-        # Check if there is an initializer (the '=' expression part)
-        value = self.visit(ctx.expression()) if ctx.expression() else None
+        # Get array dimensions
+        array_dimensions = []
+        if ctx.array_dimension():
+            for dim_ctx in ctx.array_dimension():
+                # array_dimension: '[' INTEGER ']'
+                dim_size = int(dim_ctx.INTEGER().getText())
+                array_dimensions.append(dim_size)
 
-        node = VarDeclNode(is_const, type_name, pointer_depth, name, value)
+        # Check if there is an initializer (the '=' var_initializer part)
+        value = None
+        if ctx.var_initializer():
+            value = self.visit(ctx.var_initializer())
+
+        node = VarDeclNode(is_const, type_name, pointer_depth, name, array_dimensions, value)
         return self._attach_position(node, ctx)
+
+    # ── Variable initializer ──────────────────────────────────
+
+    def visitVar_initializer(self, ctx):
+        # var_initializer: array_initializer | expression
+        if ctx.array_initializer():
+            return self.visit(ctx.array_initializer())
+        else:
+            return self.visit(ctx.expression())
+
+    # ── Array initialization ───────────────────────────────────
+
+    def visitArray_initializer(self, ctx):
+        # array_initializer: '{' initializer_list? '}'
+        initializer_list = []
+        if ctx.initializer_list():
+            initializer_list = self.visit(ctx.initializer_list())
+        node = ArrayInitializerNode(initializer_list)
+        return self._attach_position(node, ctx)
+
+    def visitInitializer_list(self, ctx):
+        # initializer_list: initializer (',' initializer)*
+        initializers = [self.visit(init) for init in ctx.initializer()]
+        return initializers
+
+    def visitInitializer(self, ctx):
+        # initializer: expression | array_initializer
+        if ctx.expression():
+            return self.visit(ctx.expression())
+        else:
+            return self.visit(ctx.array_initializer())
 
     # ── Assignment ────────────────────────────────────────────
 
     def visitAssignment(self, ctx):
-        # unary_expr '=' expression
-        target = self.visit(ctx.unary_expr())
+        # assignment: postfix_expr '=' expression
+        target = self.visit(ctx.postfix_expr())
         value = self.visit(ctx.expression())
         node = AssignNode(target, value)
         return self._attach_position(node, ctx)
@@ -128,9 +176,9 @@ class ASTBuilder(CParserVisitor):
     def visitLogicalOr(self, ctx):
         return self._binary(ctx)
 
-    def visitUnaryExpr(self, ctx):
-        # Just pass through to the unary_expr rule
-        return self.visit(ctx.unary_expr())
+    def visitPostfixExpr(self, ctx):
+        # Just pass through to postfix_expr rule
+        return self.visit(ctx.postfix_expr())
 
     # ── Unary expressions ─────────────────────────────────────
 
@@ -180,17 +228,35 @@ class ASTBuilder(CParserVisitor):
 
     # ── Postfix expressions ───────────────────────────────────
 
-    def visitPostfixIncrement(self, ctx):
-        node = IncrementNode(self.visit(ctx.primary_expr()), prefix=False)
-        return self._attach_position(node, ctx)
+    def visitPostfix_expr(self, ctx):
+        # postfix_expr: primary_expr postfix_op*
+        result = self.visit(ctx.primary_expr())
 
-    def visitPostfixDecrement(self, ctx):
-        node = DecrementNode(self.visit(ctx.primary_expr()), prefix=False)
-        return self._attach_position(node, ctx)
+        # Apply postfix operations left to right
+        if ctx.postfix_op():
+            for op_ctx in ctx.postfix_op():
+                result = self._visit_postfix_op(op_ctx, result)
 
-    def visitPrimaryExprRule(self, ctx):
-        # Just pass through to primary_expr
-        return self.visit(ctx.primary_expr())
+        return result
+
+    def _visit_postfix_op(self, ctx, expr):
+        """Visit a postfix operator with the given expression as operand"""
+        # postfix_op can be: [expression], ++, or --
+        first_child = ctx.getChild(0).getText()
+
+        if first_child == '[':
+            # Array access: [expression]
+            index = self.visit(ctx.expression())
+            node = ArrayAccessNode(expr, index)
+            return self._attach_position(node, ctx)
+        elif first_child == '++':
+            node = IncrementNode(expr, prefix=False)
+            return self._attach_position(node, ctx)
+        elif first_child == '--':
+            node = DecrementNode(expr, prefix=False)
+            return self._attach_position(node, ctx)
+
+        return expr
 
     # ── Primary expressions ───────────────────────────────────
 

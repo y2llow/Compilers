@@ -15,6 +15,8 @@ from parser.ast_nodes import (
     IncrementNode,
     DecrementNode,
     CastNode,
+    ArrayAccessNode,
+    ArrayInitializerNode,
 )
 
 
@@ -37,7 +39,7 @@ class DotVisitor:
     """
 
     def __init__(self):
-        self._lines = []   # the edges and node definitions we build up
+        self._lines = []  # the edges and node definitions we build up
         self._counter = 0  # each node needs a unique ID
 
     def _new_id(self) -> str:
@@ -103,7 +105,13 @@ class DotVisitor:
         node_id = self._new_id()
         const = "const " if node.is_const else ""
         stars = '*' * node.pointer_depth
-        self._add_node(node_id, f"VarDecl\\n{const}{node.type_name}{stars} {node.name}", shape="rectangle")
+
+        # Array dimensions: [10] or [3][4]
+        dims = ''.join([f'[{d}]' for d in node.array_dimensions])
+
+        label = f"VarDecl\\n{const}{node.type_name}{stars} {node.name}{dims}"
+        self._add_node(node_id, label, shape="rectangle")
+
         if node.value is not None:
             child_id = self._visit(node.value)
             self._add_edge(node_id, child_id)
@@ -113,7 +121,7 @@ class DotVisitor:
         node_id = self._new_id()
         self._add_node(node_id, "=", shape="ellipse")
         target_id = self._visit(node.target)
-        value_id  = self._visit(node.value)
+        value_id = self._visit(node.value)
         self._add_edge(node_id, target_id)
         self._add_edge(node_id, value_id)
         return node_id
@@ -138,6 +146,29 @@ class DotVisitor:
     def _visit_IdentifierNode(self, node: IdentifierNode) -> str:
         node_id = self._new_id()
         self._add_node(node_id, node.name, shape="ellipse")
+        return node_id
+
+    # ── Array operations ──────────────────────────────────────
+
+    def _visit_ArrayAccessNode(self, node: ArrayAccessNode) -> str:
+        node_id = self._new_id()
+        self._add_node(node_id, "[]", shape="ellipse")
+
+        array_id = self._visit(node.array)
+        index_id = self._visit(node.index)
+
+        self._add_edge(node_id, array_id)
+        self._add_edge(node_id, index_id)
+        return node_id
+
+    def _visit_ArrayInitializerNode(self, node: ArrayInitializerNode) -> str:
+        node_id = self._new_id()
+        self._add_node(node_id, "{...}", shape="rectangle")
+
+        for elem in node.elements:
+            elem_id = self._visit(elem)
+            self._add_edge(node_id, elem_id)
+
         return node_id
 
     # ── Unary operations ──────────────────────────────────────
@@ -192,7 +223,7 @@ class DotVisitor:
     def _visit_BinaryOpNode(self, node: BinaryOpNode) -> str:
         node_id = self._new_id()
         self._add_node(node_id, node.op, shape="ellipse")
-        left_id  = self._visit(node.left)
+        left_id = self._visit(node.left)
         right_id = self._visit(node.right)
         self._add_edge(node_id, left_id)
         self._add_edge(node_id, right_id)

@@ -14,26 +14,21 @@ main_function
     ;
 
 // ── Statements ───────────────────────────────────────────────
-// A statement is one of the following
-
 statement
-    : var_decl ';'       // int x = 5;
-    | assignment ';'     // x = 5;
-    | expression ';'     // 5 + 3;
+    : var_decl ';'
+    | assignment ';'
+    | return_statement
+    | expression ';'
     ;
 
-// ── Variable declaration/definition ──────────────────────────
-// Examples:
-//   int x;
-//   const float y = 3.14;
-//   int* ptr = &x;
-//   const int** ptr2;
-//   int arr[10];
-//   int matrix[3][4];
-//   int values[3] = {1, 2, 3};
+// Return statement
+return_statement
+    : 'return' expression? ';'
+    ;
 
+// ── Variable declaration ──────────────────────────────────────
 var_decl
-    : CONST? type_spec '*'* IDENTIFIER array_dimension* ('=' array_initializer)?
+    : CONST? type_spec '*'* IDENTIFIER array_dimension* ('=' var_initializer)?
     ;
 
 // Array dimensions: [10] or [3][4], etc.
@@ -41,9 +36,15 @@ array_dimension
     : '[' INTEGER ']'
     ;
 
+// Variable initializer - can be expression OR array initializer
+var_initializer
+    : array_initializer
+    | expression
+    ;
+
 // Array initializer: {1, 2, 3} or {{1,2},{3,4}}, etc.
 array_initializer
-    : '{' initializer_list '}'
+    : '{' initializer_list? '}'
     ;
 
 initializer_list
@@ -55,7 +56,7 @@ initializer
     | array_initializer
     ;
 
-// The basic types — easy to extend later
+// The basic types
 type_spec
     : INT
     | FLOAT_KW
@@ -63,18 +64,11 @@ type_spec
     ;
 
 // ── Assignment ───────────────────────────────────────────────
-// Examples:
-//   x = 5;
-//   *ptr = 3;
-//   arr[5] = 10;
-//   matrix[1][2] = 42;
-
 assignment
-    : unary_expr '=' expression
+    : postfix_expr '=' expression
     ;
 
-// ── Expressions (order of precedence, lowest to highest) ─────
-
+// ── Expressions ───────────────────────────────────────────────
 expression
     : expression ('*' | '/' | '%') expression          # mulDivMod
     | expression ('+' | '-') expression                # addSub
@@ -86,17 +80,10 @@ expression
     | expression '|' expression                        # bitwiseOr
     | expression '&&' expression                       # logicalAnd
     | expression '||' expression                       # logicalOr
-    | unary_expr                                       # unaryExpr
+    | postfix_expr                                     # postfixExpr
     ;
 
 // ── Unary expressions ─────────────────────────────────────────
-// Examples:
-//   -x, !x, ~x
-//   *ptr (dereference)
-//   &x (address-of)
-//   ++x, --x (prefix)
-//   (int) x (cast)
-
 unary_expr
     : '!' unary_expr                    # logicalNot
     | '~' unary_expr                    # bitwiseNot
@@ -110,69 +97,52 @@ unary_expr
     ;
 
 // ── Postfix expressions ───────────────────────────────────────
-// x++, x--, arr[5], matrix[1][2]
-
+// Handles: arr[5], matrix[i][j], arr[5]++, etc.
 postfix_expr
     : primary_expr postfix_op*
     ;
 
 postfix_op
-    : '++'                              # postfixIncrement
+    : '[' expression ']'                # arrayAccess
+    | '++'                              # postfixIncrement
     | '--'                              # postfixDecrement
-    | '[' expression ']'                # arrayAccess
     ;
 
 // ── Primary expressions ───────────────────────────────────────
-// The "building blocks": literals, identifiers, parentheses
-
 primary_expr
-    : '(' expression ')'               # parens
-    | literal                          # literalExpr
-    | IDENTIFIER                       # identifierExpr
+    : '(' expression ')'                # parens
+    | literal                           # literalExpr
+    | IDENTIFIER                        # identifierExpr
     ;
 
 // ── Literals ──────────────────────────────────────────────────
-// Easy to extend: just add a new alternative
-
 literal
-    : INTEGER                          # intLiteral
-    | FLOAT_LIT                        # floatLiteral
-    | CHAR_LIT                         # charLiteral
+    : INTEGER                           # intLiteral
+    | FLOAT_LIT                         # floatLiteral
+    | CHAR_LIT                          # charLiteral
     ;
 
 // ========================================
 // LEXER RULES (UPPERCASE)
 // ========================================
 
-// ── Keywords ──────────────────────────────────────────────────
-// Keywords must be defined BEFORE the IDENTIFIER rule,
-// otherwise they will be recognized as identifiers!
+CONST    : 'const' ;
+INT      : 'int' ;
+FLOAT_KW : 'float' ;
+CHAR_KW  : 'char' ;
+MAIN     : 'main' ;
 
-CONST   : 'const' ;
-INT     : 'int' ;
-FLOAT_KW: 'float' ;
-CHAR_KW : 'char' ;
-MAIN    : 'main' ;
-
-// ── Literals ──────────────────────────────────────────────────
-
-// Float must be defined before INTEGER, otherwise "3.14" would be
-// tokenized as "3" followed by ".14"
+// Float must be defined before INTEGER
 FLOAT_LIT  : [0-9]+ '.' [0-9]+ ;
 INTEGER    : [0-9]+ ;
 
 // Character literal: 'a', 'x', '\n', etc.
 CHAR_LIT   : '\'' ( ~['\\] | '\\' . ) '\'' ;
 
-// Identifier: starts with a letter or underscore, followed by letters/digits/underscores
+// Identifier
 IDENTIFIER : [a-zA-Z_][a-zA-Z_0-9]* ;
 
-// ── Whitespace and comments ───────────────────────────────────
-
+// Whitespace and comments
 WS            : [ \t\r\n]+  -> skip ;
-
-// Single-line comments
 LINE_COMMENT  : '//' ~[\r\n]* -> channel(HIDDEN) ;
-
-// Multi-line comments
 BLOCK_COMMENT : '/*' .*? '*/' -> channel(HIDDEN) ;
