@@ -28,9 +28,31 @@ statement
 //   const float y = 3.14;
 //   int* ptr = &x;
 //   const int** ptr2;
+//   int arr[10];
+//   int matrix[3][4];
+//   int values[3] = {1, 2, 3};
 
 var_decl
-    : CONST? type_spec '*'* IDENTIFIER ('=' expression)?
+    : CONST? type_spec '*'* IDENTIFIER array_dimension* ('=' array_initializer)?
+    ;
+
+// Array dimensions: [10] or [3][4], etc.
+array_dimension
+    : '[' INTEGER ']'
+    ;
+
+// Array initializer: {1, 2, 3} or {{1,2},{3,4}}, etc.
+array_initializer
+    : '{' initializer_list '}'
+    ;
+
+initializer_list
+    : initializer (',' initializer)*
+    ;
+
+initializer
+    : expression
+    | array_initializer
     ;
 
 // The basic types — easy to extend later
@@ -44,6 +66,8 @@ type_spec
 // Examples:
 //   x = 5;
 //   *ptr = 3;
+//   arr[5] = 10;
+//   matrix[1][2] = 42;
 
 assignment
     : unary_expr '=' expression
@@ -86,12 +110,16 @@ unary_expr
     ;
 
 // ── Postfix expressions ───────────────────────────────────────
-// x++, x--
+// x++, x--, arr[5], matrix[1][2]
 
 postfix_expr
-    : primary_expr '++'                 # postfixIncrement
-    | primary_expr '--'                 # postfixDecrement
-    | primary_expr                      # primaryExprRule
+    : primary_expr postfix_op*
+    ;
+
+postfix_op
+    : '++'                              # postfixIncrement
+    | '--'                              # postfixDecrement
+    | '[' expression ']'                # arrayAccess
     ;
 
 // ── Primary expressions ───────────────────────────────────────
@@ -142,5 +170,9 @@ IDENTIFIER : [a-zA-Z_][a-zA-Z_0-9]* ;
 // ── Whitespace and comments ───────────────────────────────────
 
 WS            : [ \t\r\n]+  -> skip ;
-COMMENT       : '//' ~[\r\n]* -> skip ;
-BLOCK_COMMENT : '/*' .*? '*/' -> skip ;
+
+// Single-line comments
+LINE_COMMENT  : '//' ~[\r\n]* -> channel(HIDDEN) ;
+
+// Multi-line comments
+BLOCK_COMMENT : '/*' .*? '*/' -> channel(HIDDEN) ;
