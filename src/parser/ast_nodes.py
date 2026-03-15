@@ -83,6 +83,27 @@ class VarDeclNode(ASTNode):
         return f"VarDecl({const}{self.type_name}{stars} {self.name}{dims}{val})"
 
 
+class ReturnNode(ASTNode):
+    """
+    Return statement.
+    Examples:
+        return 0;
+        return x + y;
+        return;
+
+    value: ASTNode or None
+    """
+
+    def __init__(self, value=None):
+        super().__init__()
+        self.value = value
+
+    def __repr__(self):
+        if self.value is None:
+            return "Return()"
+        return f"Return({self.value})"
+
+
 class AssignNode(ASTNode):
     """
     An assignment statement.

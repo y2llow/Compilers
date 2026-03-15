@@ -4,6 +4,7 @@ from parser.ast_nodes import (
     MainFunctionNode,
     VarDeclNode,
     AssignNode,
+    ReturnNode,
     IntLiteralNode,
     FloatLiteralNode,
     CharLiteralNode,
@@ -100,6 +101,12 @@ class ConstantFolder:
                 # Value is no longer known (e.g. x = x + y)
                 self._known.pop(name, None)
 
+        return node
+
+    def visit_ReturnNode(self, node: ReturnNode) -> ReturnNode:
+        """Fold return expression"""
+        if node.value is not None:
+            node.value = self.visit(node.value)
         return node
 
     # ── Constant propagation ──────────────────────────────────

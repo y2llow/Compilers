@@ -106,6 +106,12 @@ class SemanticAnalyzer:
         # Pop scope
         self.symbol_table.pop_scope()
 
+    def visit_ReturnNode(self, node):
+        """Bezoek return statement"""
+        # Check de return expressie (als aanwezig)
+        if node.value is not None:
+            self._check_expression(node.value)
+
     # ── Statements ────────────────────────────────────────────
 
     def visit_VarDeclNode(self, node):

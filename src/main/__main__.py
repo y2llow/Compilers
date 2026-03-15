@@ -26,6 +26,11 @@ def main():
         metavar="OUTPUT.dot",
         help="Write the AST in Graphviz dot format to this file"
     )
+    arg_parser.add_argument(
+        "--target_llvm",
+        metavar="OUTPUT.ll",
+        help="Generate LLVM IR code to this file"
+    )
     args = arg_parser.parse_args()
 
     # Read source file for error reporting
@@ -93,7 +98,23 @@ def main():
     print(ast)
     print()
 
-    # Step 5: Graphviz dot output (pass --dot output.dot to enable)
+    # Step 5: LLVM IR Generation (if requested)
+    if args.target_llvm:
+        from llvm_target.llvm_generator import LLVMGenerator
+
+        print("=== LLVM IR Generation ===")
+        llvm_gen = LLVMGenerator()
+        llvm_ir = llvm_gen.generate(ast)
+
+        with open(args.target_llvm, 'w') as f:
+            f.write(llvm_ir)
+
+        print(f"✅ LLVM IR written to: {args.target_llvm}")
+        print(f"Test with: lli {args.target_llvm}")
+        print(f"           echo $?")
+        print()
+
+    # Step 6: Graphviz dot output (pass --dot output.dot to enable)
     if args.dot:
         dot_string = DotVisitor().visit(ast)
         with open(args.dot, "w") as f:

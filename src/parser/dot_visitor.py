@@ -4,6 +4,7 @@ from parser.ast_nodes import (
     MainFunctionNode,
     VarDeclNode,
     AssignNode,
+    ReturnNode,
     IntLiteralNode,
     FloatLiteralNode,
     CharLiteralNode,
@@ -146,6 +147,18 @@ class DotVisitor:
         value_id = self._visit(node.value)
         self._add_edge(node_id, target_id)
         self._add_edge(node_id, value_id)
+        return node_id
+
+    def _visit_ReturnNode(self, node: ReturnNode) -> str:
+        node_id = self._new_id()
+        label = "return"
+        label = self._format_label_with_comments(label, node)
+        self._add_node(node_id, label, shape="rectangle")
+
+        if node.value is not None:
+            child_id = self._visit(node.value)
+            self._add_edge(node_id, child_id)
+
         return node_id
 
     # ── Literals ──────────────────────────────────────────────

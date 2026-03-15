@@ -4,6 +4,7 @@ from parser.ast_nodes import (
     MainFunctionNode,
     VarDeclNode,
     AssignNode,
+    ReturnNode,
     IntLiteralNode,
     FloatLiteralNode,
     CharLiteralNode,
@@ -38,6 +39,7 @@ class ASTBuilder(CParserVisitor):
         from parser.ast_nodes import (
             VarDeclNode,
             AssignNode,
+            ReturnNode,
             MainFunctionNode,
             ProgramNode,
             IncrementNode,
@@ -47,6 +49,7 @@ class ASTBuilder(CParserVisitor):
         statement_types = (
             VarDeclNode,
             AssignNode,
+            ReturnNode,
             MainFunctionNode,
             ProgramNode,
             IncrementNode,
@@ -98,13 +101,17 @@ class ASTBuilder(CParserVisitor):
         return self.visit(ctx.getChild(0))
 
     def visitReturn_statement(self, ctx):
-        # return_statement: 'return' expression? ';'
+        """
+        Creates a proper ReturnNode instead of just returning the expression.
+        return_statement: 'return' expression? ';'
+        """
         expr = None
         if ctx.expression():
             expr = self.visit(ctx.expression())
-        # For now, we'll just return the expression (or None)
-        # You might want to create a ReturnNode later
-        return expr
+
+        # Maak ReturnNode
+        node = ReturnNode(expr)
+        return self._attach_position(node, ctx)
 
     # ── Variable declaration ───────────────────────────────────
 
