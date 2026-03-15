@@ -26,6 +26,35 @@ class ASTBuilder(CParserVisitor):
     Updated to handle the new grammar with var_initializer.
     """
 
+    def __init__(self, comment_collector=None, source_lines=None):
+        self.comment_collector = comment_collector
+        self.source_lines = source_lines or []
+
+    def _should_attach_comments(self, node):
+        """
+        Bepaal of deze node comments mag krijgen.
+        Alleen top-level statement nodes, niet sub-expressions.
+        """
+        from parser.ast_nodes import (
+            VarDeclNode,
+            AssignNode,
+            MainFunctionNode,
+            ProgramNode,
+            IncrementNode,
+            DecrementNode,
+        )
+
+        statement_types = (
+            VarDeclNode,
+            AssignNode,
+            MainFunctionNode,
+            ProgramNode,
+            IncrementNode,
+            DecrementNode,
+        )
+
+        return isinstance(node, statement_types)
+
     def _get_line_col(self, ctx):
         """Extract line and column from ANTLR context"""
         if hasattr(ctx, 'start'):
@@ -33,11 +62,22 @@ class ASTBuilder(CParserVisitor):
         return 0, 0
 
     def _attach_position(self, node, ctx):
-        """Attach line and column to AST node"""
+        """Attach line, column, source code, and comments to AST node"""
         if node is not None:
             line, col = self._get_line_col(ctx)
             node.line = line
             node.column = col
+
+            # Get source line
+            if 0 < line <= len(self.source_lines):
+                node.source_line = self.source_lines[line - 1].rstrip('\n')
+
+            # Get comments - ALLEEN voor statement-level nodes
+            if self.comment_collector and self._should_attach_comments(node):
+                leading, inline = self.comment_collector.get_for_line(line)
+                node.leading_comments = leading
+                node.inline_comment = inline
+
         return node
 
     # ── Top level ─────────────────────────────────────────────
@@ -47,7 +87,8 @@ class ASTBuilder(CParserVisitor):
 
     def visitMain_function(self, ctx):
         statements = [self.visit(stmt) for stmt in ctx.statement()]
-        return MainFunctionNode(statements)
+        node = MainFunctionNode(statements)
+        return self._attach_position(node, ctx)
 
     # ── Statements ────────────────────────────────────────────
 

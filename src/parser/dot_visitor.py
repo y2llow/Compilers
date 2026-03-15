@@ -54,6 +54,24 @@ class DotVisitor:
     def _add_edge(self, parent_id: str, child_id: str):
         self._lines.append(f'    {parent_id} -> {child_id};')
 
+    def _format_label_with_comments(self, label: str, ast_node) -> str:
+        """Format a label with comments if the AST node has any."""
+        parts = []
+
+        # Leading comments
+        if ast_node and hasattr(ast_node, 'leading_comments') and ast_node.leading_comments:
+            for comment in ast_node.leading_comments:
+                parts.append(f"💬 {comment}")
+
+        # Label
+        parts.append(label)
+
+        # Inline comment
+        if ast_node and hasattr(ast_node, 'inline_comment') and ast_node.inline_comment:
+            parts.append(f"💬 {ast_node.inline_comment}")
+
+        return "\\n---\\n".join(parts) if len(parts) > 1 else label
+
     # ── Public entry point ────────────────────────────────────
 
     def visit(self, node: ASTNode) -> str:
@@ -86,14 +104,18 @@ class DotVisitor:
 
     def _visit_ProgramNode(self, node: ProgramNode) -> str:
         node_id = self._new_id()
-        self._add_node(node_id, "Program", shape="rectangle")
+        label = "Program"
+        label = self._format_label_with_comments(label, node)
+        self._add_node(node_id, label, shape="rectangle")
         child_id = self._visit(node.main_function)
         self._add_edge(node_id, child_id)
         return node_id
 
     def _visit_MainFunctionNode(self, node: MainFunctionNode) -> str:
         node_id = self._new_id()
-        self._add_node(node_id, "main()", shape="rectangle")
+        label = "main()"
+        label = self._format_label_with_comments(label, node)
+        self._add_node(node_id, label, shape="rectangle")
         for stmt in node.statements:
             child_id = self._visit(stmt)
             self._add_edge(node_id, child_id)
@@ -105,11 +127,9 @@ class DotVisitor:
         node_id = self._new_id()
         const = "const " if node.is_const else ""
         stars = '*' * node.pointer_depth
-
-        # Array dimensions: [10] or [3][4]
         dims = ''.join([f'[{d}]' for d in node.array_dimensions])
-
         label = f"VarDecl\\n{const}{node.type_name}{stars} {node.name}{dims}"
+        label = self._format_label_with_comments(label, node)
         self._add_node(node_id, label, shape="rectangle")
 
         if node.value is not None:
@@ -119,7 +139,9 @@ class DotVisitor:
 
     def _visit_AssignNode(self, node: AssignNode) -> str:
         node_id = self._new_id()
-        self._add_node(node_id, "=", shape="ellipse")
+        label = "="
+        label = self._format_label_with_comments(label, node)
+        self._add_node(node_id, label, shape="ellipse")
         target_id = self._visit(node.target)
         value_id = self._visit(node.value)
         self._add_edge(node_id, target_id)
@@ -130,29 +152,39 @@ class DotVisitor:
 
     def _visit_IntLiteralNode(self, node: IntLiteralNode) -> str:
         node_id = self._new_id()
-        self._add_node(node_id, str(node.value), shape="rectangle")
+        label = str(node.value)
+        label = self._format_label_with_comments(label, node)
+        self._add_node(node_id, label, shape="rectangle")
         return node_id
 
     def _visit_FloatLiteralNode(self, node: FloatLiteralNode) -> str:
         node_id = self._new_id()
-        self._add_node(node_id, str(node.value), shape="rectangle")
+        label = str(node.value)
+        label = self._format_label_with_comments(label, node)
+        self._add_node(node_id, label, shape="rectangle")
         return node_id
 
     def _visit_CharLiteralNode(self, node: CharLiteralNode) -> str:
         node_id = self._new_id()
-        self._add_node(node_id, f"'{node.value}'", shape="rectangle")
+        label = f"'{node.value}'"
+        label = self._format_label_with_comments(label, node)
+        self._add_node(node_id, label, shape="rectangle")
         return node_id
 
     def _visit_IdentifierNode(self, node: IdentifierNode) -> str:
         node_id = self._new_id()
-        self._add_node(node_id, node.name, shape="ellipse")
+        label = node.name
+        label = self._format_label_with_comments(label, node)
+        self._add_node(node_id, label, shape="ellipse")
         return node_id
 
     # ── Array operations ──────────────────────────────────────
 
     def _visit_ArrayAccessNode(self, node: ArrayAccessNode) -> str:
         node_id = self._new_id()
-        self._add_node(node_id, "[]", shape="ellipse")
+        label = "[]"
+        label = self._format_label_with_comments(label, node)
+        self._add_node(node_id, label, shape="ellipse")
 
         array_id = self._visit(node.array)
         index_id = self._visit(node.index)
@@ -163,7 +195,9 @@ class DotVisitor:
 
     def _visit_ArrayInitializerNode(self, node: ArrayInitializerNode) -> str:
         node_id = self._new_id()
-        self._add_node(node_id, "{...}", shape="rectangle")
+        label = "{...}"
+        label = self._format_label_with_comments(label, node)
+        self._add_node(node_id, label, shape="rectangle")
 
         for elem in node.elements:
             elem_id = self._visit(elem)
@@ -175,21 +209,27 @@ class DotVisitor:
 
     def _visit_UnaryOpNode(self, node: UnaryOpNode) -> str:
         node_id = self._new_id()
-        self._add_node(node_id, node.op, shape="ellipse")
+        label = node.op
+        label = self._format_label_with_comments(label, node)
+        self._add_node(node_id, label, shape="ellipse")
         child_id = self._visit(node.operand)
         self._add_edge(node_id, child_id)
         return node_id
 
     def _visit_DereferenceNode(self, node: DereferenceNode) -> str:
         node_id = self._new_id()
-        self._add_node(node_id, "deref (*)", shape="ellipse")
+        label = "deref (*)"
+        label = self._format_label_with_comments(label, node)
+        self._add_node(node_id, label, shape="ellipse")
         child_id = self._visit(node.operand)
         self._add_edge(node_id, child_id)
         return node_id
 
     def _visit_AddressOfNode(self, node: AddressOfNode) -> str:
         node_id = self._new_id()
-        self._add_node(node_id, "addr (&)", shape="ellipse")
+        label = "addr (&)"
+        label = self._format_label_with_comments(label, node)
+        self._add_node(node_id, label, shape="ellipse")
         child_id = self._visit(node.operand)
         self._add_edge(node_id, child_id)
         return node_id
@@ -197,6 +237,7 @@ class DotVisitor:
     def _visit_IncrementNode(self, node: IncrementNode) -> str:
         node_id = self._new_id()
         label = "++ (prefix)" if node.prefix else "++ (postfix)"
+        label = self._format_label_with_comments(label, node)
         self._add_node(node_id, label, shape="ellipse")
         child_id = self._visit(node.operand)
         self._add_edge(node_id, child_id)
@@ -205,6 +246,7 @@ class DotVisitor:
     def _visit_DecrementNode(self, node: DecrementNode) -> str:
         node_id = self._new_id()
         label = "-- (prefix)" if node.prefix else "-- (postfix)"
+        label = self._format_label_with_comments(label, node)
         self._add_node(node_id, label, shape="ellipse")
         child_id = self._visit(node.operand)
         self._add_edge(node_id, child_id)
@@ -213,7 +255,9 @@ class DotVisitor:
     def _visit_CastNode(self, node: CastNode) -> str:
         node_id = self._new_id()
         stars = '*' * node.pointer_depth
-        self._add_node(node_id, f"cast ({node.type_name}{stars})", shape="ellipse")
+        label = f"cast ({node.type_name}{stars})"
+        label = self._format_label_with_comments(label, node)
+        self._add_node(node_id, label, shape="ellipse")
         child_id = self._visit(node.operand)
         self._add_edge(node_id, child_id)
         return node_id
@@ -222,7 +266,9 @@ class DotVisitor:
 
     def _visit_BinaryOpNode(self, node: BinaryOpNode) -> str:
         node_id = self._new_id()
-        self._add_node(node_id, node.op, shape="ellipse")
+        label = node.op
+        label = self._format_label_with_comments(label, node)
+        self._add_node(node_id, label, shape="ellipse")
         left_id = self._visit(node.left)
         right_id = self._visit(node.right)
         self._add_edge(node_id, left_id)

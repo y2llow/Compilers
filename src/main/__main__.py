@@ -9,6 +9,8 @@ from parser.constant_folder import ConstantFolder
 from parser.dot_visitor import DotVisitor
 from parser.error_handler import SyntaxErrorListener, RED, RESET
 from parser.semantics.semantic_analyser import SemanticAnalyzer
+from parser.comment_collector import CommentCollector
+
 
 
 def main():
@@ -35,6 +37,9 @@ def main():
     # Step 1: Lex
     lexer = CParserLexer(input_stream)
     token_stream = antlr4.CommonTokenStream(lexer)
+    # Step 1.5: Collect comments
+    comment_collector = CommentCollector(token_stream, source_lines)
+    comment_collector.collect()
 
     # Step 2: Parse
     parser = CParserParser(token_stream)
@@ -56,7 +61,7 @@ def main():
         sys.exit(1)
 
     # Step 3: Build AST
-    ast = ASTBuilder().visit(tree)
+    ast = ASTBuilder(comment_collector, source_lines).visit(tree)
     print("=== AST before semantic analysis ===")
     print(ast)
     print()

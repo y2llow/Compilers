@@ -16,7 +16,7 @@ class ASTNode:
         self.column = 0
         self.source_line = ""  # Original source code line for comments
         self.leading_comments = []  # Comments before this node
-
+        self.inline_comment = None  # Comment on same line as code
 
 # ── Program ──────────────────────────────────────────────────
 
