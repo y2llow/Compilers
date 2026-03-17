@@ -18,8 +18,8 @@ from parser.ast_nodes import (
     CastNode,
     ArrayAccessNode,
     ArrayInitializerNode,
+    StringLiteralNode,
 )
-
 
 class DotVisitor:
     """
@@ -49,7 +49,8 @@ class DotVisitor:
         return f"node{self._counter}"
 
     def _add_node(self, node_id: str, label: str, shape: str = "ellipse"):
-        label = label.replace('"', '\\"').replace('\\', '\\\\')
+        # Escape backslashes first, then quotes
+        label = label.replace('\\', '\\\\').replace('"', '\\"')
         self._lines.append(f'    {node_id} [label="{label}", shape={shape}];')
 
     def _add_edge(self, parent_id: str, child_id: str):
@@ -71,7 +72,8 @@ class DotVisitor:
         if ast_node and hasattr(ast_node, 'inline_comment') and ast_node.inline_comment:
             parts.append(f"💬 {ast_node.inline_comment}")
 
-        return "\\n---\\n".join(parts) if len(parts) > 1 else label
+        # Use real \n — _add_node handles escaping
+        return "\n---\n".join(parts) if len(parts) > 1 else label
 
     # ── Public entry point ────────────────────────────────────
 
@@ -129,7 +131,8 @@ class DotVisitor:
         const = "const " if node.is_const else ""
         stars = '*' * node.pointer_depth
         dims = ''.join([f'[{d}]' for d in node.array_dimensions])
-        label = f"VarDecl\\n{const}{node.type_name}{stars} {node.name}{dims}"
+        # Use real \n — _add_node handles escaping
+        label = f"VarDecl\n{const}{node.type_name}{stars} {node.name}{dims}"
         label = self._format_label_with_comments(label, node)
         self._add_node(node_id, label, shape="rectangle")
 
@@ -181,6 +184,16 @@ class DotVisitor:
         node_id = self._new_id()
         label = f"'{node.value}'"
         label = self._format_label_with_comments(label, node)
+        self._add_node(node_id, label, shape="rectangle")
+        return node_id
+
+    def _visit_StringLiteralNode(self, node: StringLiteralNode) -> str:
+        node_id = self._new_id()
+        # Show first 20 chars of string to avoid huge labels
+        display = node.value[:20]
+        if len(node.value) > 20:
+            display += "..."
+        label = f'"{display}"'
         self._add_node(node_id, label, shape="rectangle")
         return node_id
 

@@ -3,7 +3,6 @@
 # ============================================================
 from parser.semantics.symbol_table import SymbolTable
 from parser.ast_nodes import *
-
 # ANSI color codes
 RED = '\033[91m'
 YELLOW = '\033[93m'
@@ -317,6 +316,9 @@ class SemanticAnalyzer:
         elif isinstance(node, CharLiteralNode):
             return ('char', 0)
 
+        elif isinstance(node, StringLiteralNode):
+            return ('char', 1)
+
         elif isinstance(node, IdentifierNode):
             symbol = self.symbol_table.lookup(node.name)
             if symbol is None:
@@ -438,6 +440,10 @@ class SemanticAnalyzer:
         """
         target_base, target_ptr = target_type[0], target_type[1]
         value_base, value_ptr = value_type[0], value_type[1]
+
+        # Allow string assignment to char array: char buf[50] = "test"
+        if target_base == 'char' and target_ptr == 0 and value_base == 'char' and value_ptr == 1:
+            return
 
         # Pointer assignments
         if target_ptr > 0 or value_ptr > 0:
