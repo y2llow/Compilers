@@ -19,8 +19,19 @@ from parser.ast_nodes import (
     ArrayAccessNode,
     ArrayInitializerNode,
     StringLiteralNode,
+    IncludeNode,
+    PrintfNode,
+    ScanfNode,
 )
 
+def _unescape(s: str) -> str:
+    return (s
+        .replace('\\n', '\n')
+        .replace('\\t', '\t')
+        .replace('\\r', '\r')
+        .replace('\\"', '"')
+        .replace('\\\\', '\\')
+    )
 
 class ASTBuilder(CParserVisitor):
     """
@@ -87,7 +98,14 @@ class ASTBuilder(CParserVisitor):
     # ── Top level ─────────────────────────────────────────────
 
     def visitTranslation_unit(self, ctx):
-        return ProgramNode(self.visit(ctx.main_function()))
+        includes = [self.visit(inc) for inc in ctx.include_directive()]
+        main_fn = self.visit(ctx.main_function())
+        return ProgramNode(includes, main_fn)
+
+    def visitInclude_directive(self, ctx):
+        # include_directive: HASH INCLUDE LT_STDIO_H GT
+        node = IncludeNode('stdio.h')
+        return self._attach_position(node, ctx)
 
     def visitMain_function(self, ctx):
         statements = [self.visit(stmt) for stmt in ctx.statement()]
@@ -349,3 +367,42 @@ class ASTBuilder(CParserVisitor):
         string_value = string_value.replace('\\\\', '\\')
         node = StringLiteralNode(string_value)
         return self._attach_position(node, ctx)
+
+    # ── Includes ──────────────────────────────────────────────
+    def visitInclude_directive(self, ctx):
+        # include_directive: HASH INCLUDE LT_STDIO_H GT
+        node = IncludeNode('stdio.h')
+        return self._attach_position(node, ctx)
+
+    def visitPrintf_statement(self, ctx):
+        # printf_statement: PRINTF '(' STRING_LIT (',' printf_arg)* ')'
+        raw = ctx.STRING_LIT().getText()  # e.g. "\"Hello\\n\""
+        format_string = _unescape(raw[1:-1])  # strip quotes, unescape
+        args = [self.visit(a) for a in ctx.printf_arg()]
+        node = PrintfNode(format_string, args)
+        return self._attach_position(node, ctx)
+
+    def visitPrintf_arg(self, ctx):
+        return self.visit(ctx.unary_expr())
+
+    def visitScanf_statement(self, ctx):
+        # scanf_statement: SCANF '(' STRING_LIT (',' scanf_arg)* ')'
+        raw = ctx.STRING_LIT().getText()
+        format_string = _unescape(raw[1:-1])
+        args = [self.visit(a) for a in ctx.scanf_arg()]
+        node = ScanfNode(format_string, args)
+        return self._attach_position(node, ctx)
+
+    def visitScanf_arg(self, ctx):
+        return self.visit(ctx.unary_expr())
+
+    # Helper (can be a module-level function or reuse the existing logic
+    # from visitStringLiteral):
+    def _unescape(s: str) -> str:
+        return (s
+                .replace('\\n', '\n')
+                .replace('\\t', '\t')
+                .replace('\\r', '\r')
+                .replace('\\"', '"')
+                .replace('\\\\', '\\')
+                )

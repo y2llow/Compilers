@@ -21,14 +21,16 @@ class ASTNode:
 # ── Program ──────────────────────────────────────────────────
 
 class ProgramNode(ASTNode):
-    """Root node: holds the main function."""
+    """Root node: holds optional includes + the main function."""
 
-    def __init__(self, main_function):
+    def __init__(self, includes, main_function):
         super().__init__()
+        self.includes = includes  # list[IncludeNode]
         self.main_function = main_function
 
     def __repr__(self):
-        return f"Program({self.main_function})"
+        inc = ', '.join(repr(i) for i in self.includes)
+        return f"Program(includes=[{inc}], {self.main_function})"
 
 
 # ── Main function ─────────────────────────────────────────────
@@ -175,6 +177,59 @@ class StringLiteralNode(ASTNode):
     def __repr__(self):
         escaped = self.value.replace('"', '\\"')
         return f'String("{escaped}")'
+
+# ── I/O nodes (stdio.h) ──────────────────────────────────────
+
+class IncludeNode(ASTNode):
+    """
+    Represents an #include directive.
+    For now only <stdio.h> is supported.
+
+    header: str, e.g. 'stdio.h'
+    """
+
+    def __init__(self, header: str):
+        super().__init__()
+        self.header = header
+
+    def __repr__(self):
+        return f"Include(<{self.header}>)"
+
+
+class PrintfNode(ASTNode):
+    """
+    A printf() call.
+
+    format_string: str  — the raw format string (without outer quotes)
+    args          : list[ASTNode]  — the extra arguments after the format string
+    """
+
+    def __init__(self, format_string: str, args: list):
+        super().__init__()
+        self.format_string = format_string
+        self.args = args  # may be empty
+
+    def __repr__(self):
+        args_repr = ', '.join(repr(a) for a in self.args)
+        return f'Printf("{self.format_string}", [{args_repr}])'
+
+
+class ScanfNode(ASTNode):
+    """
+    A scanf() call.
+
+    format_string: str  — the raw format string (without outer quotes)
+    args          : list[ASTNode]  — the address-of arguments (&var, etc.)
+    """
+
+    def __init__(self, format_string: str, args: list):
+        super().__init__()
+        self.format_string = format_string
+        self.args = args  # may be empty
+
+    def __repr__(self):
+        args_repr = ', '.join(repr(a) for a in self.args)
+        return f'Scanf("{self.format_string}", [{args_repr}])'
 
 # ── Identifier ────────────────────────────────────────────────
 

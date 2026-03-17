@@ -16,6 +16,9 @@ from parser.ast_nodes import (
     IncrementNode,
     DecrementNode,
     CastNode,
+    IncludeNode,
+    PrintfNode,
+    ScanfNode,
 )
 
 
@@ -60,7 +63,8 @@ class ConstantFolder:
 
     # ── Program structure ─────────────────────────────────────
 
-    def visit_ProgramNode(self, node: ProgramNode) -> ProgramNode:
+    def visit_ProgramNode(self, node):
+        # includes have no foldable expressions — leave them alone
         node.main_function = self.visit(node.main_function)
         return node
 
@@ -194,3 +198,13 @@ class ConstantFolder:
             case '<<': return left << right
             case '>>': return left >> right
             case _:    raise ValueError(f"Unknown binary operator: {op}")
+
+    # ── Evaluation helpers ────────────────────────────────────
+
+    def visit_PrintfNode(self, node):
+        node.args = [self.visit(a) for a in node.args]
+        return node
+
+    def visit_ScanfNode(self, node):
+        node.args = [self.visit(a) for a in node.args]
+        return node
