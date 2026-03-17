@@ -160,6 +160,22 @@ class CharLiteralNode(ASTNode):
         return f"Char('{self.value}')"
 
 
+class StringLiteralNode(ASTNode):
+    """
+    A string literal, e.g. "hello" or "world\n".
+
+    In C, string literals are zero-terminated character arrays.
+    We store them as StringLiteralNode for semantic analysis.
+    """
+
+    def __init__(self, value: str):
+        super().__init__()
+        self.value = value  # The string content (without quotes)
+
+    def __repr__(self):
+        escaped = self.value.replace('"', '\\"')
+        return f'String("{escaped}")'
+
 # ── Identifier ────────────────────────────────────────────────
 
 class IdentifierNode(ASTNode):
