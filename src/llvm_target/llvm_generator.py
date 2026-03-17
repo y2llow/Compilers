@@ -1,11 +1,10 @@
 """
-LLVM IR Code Generator
+LLVM IR Code Generator - WITH COMMENT SUPPORT
 ======================
 
 Vertaalt AST naar LLVM IR code.
 
-Stap 1 (NU): Alleen int main() { return 0; } ondersteunen
-Stap 2 (LATER): Variables, expressions, etc.
+NIEUW: Comments from source code are now embedded in LLVM output
 """
 
 from llvmlite import ir
@@ -45,6 +44,11 @@ class LLVMGenerator:
         # Symbol table: variabele naam -> LLVM waarde
         self.variables = {}
 
+        # NIEUW: Comment tracking
+        # Maps: line_number -> {'source': str, 'leading': list, 'inline': str}
+        self.line_to_comment = {}
+        self.comment_order = []  # Track order of statements
+
     # ═══════════════════════════════════════════════════════════
     # PUBLIC API
     # ═══════════════════════════════════════════════════════════
@@ -60,7 +64,110 @@ class LLVMGenerator:
         self.visit(ast)
 
         # Return de gegenereerde LLVM IR als string
-        return str(self.module)
+        raw_llvm = str(self.module)
+
+        # NIEUW: Add comments to LLVM output
+        llvm_with_comments = self._add_comments_to_llvm(raw_llvm)
+
+        return llvm_with_comments
+
+    # ═══════════════════════════════════════════════════════════
+    # NIEUW: COMMENT HANDLING
+    # ═══════════════════════════════════════════════════════════
+
+    def _collect_comments(self, node):
+        """Collect all comment info from AST node."""
+        if not hasattr(node, 'line') or node.line == 0:
+            return
+
+        if node.line in self.line_to_comment:
+            return
+
+        source_line = getattr(node, 'source_line', '').strip()
+        leading = getattr(node, 'leading_comments', [])
+        inline = getattr(node, 'inline_comment', None)
+
+        # Store all info
+        self.line_to_comment[node.line] = {
+            'source': source_line,
+            'leading': leading,
+            'inline': inline
+        }
+        self.comment_order.append(node.line)
+
+    def _add_comments_to_llvm(self, llvm_ir):
+        """Add source code comments to LLVM IR output."""
+        if not self.line_to_comment:
+            return llvm_ir
+
+        lines = llvm_ir.split('\n')
+        result = []
+
+        in_main = False
+        comment_idx = 0
+        last_was_alloca = False  # Track if last instruction was alloca
+
+        for line in lines:
+            # Detect main function start
+            if 'define i32 @main()' in line or 'define i32 @"main"()' in line:
+                in_main = True
+                # Add ALL comments (leading + source) to the right of define
+                if comment_idx < len(self.comment_order):
+                    stmt_line = self.comment_order[comment_idx]
+                    info = self.line_to_comment[stmt_line]
+
+                    # Build complete comment
+                    comment_parts = [info["source"]]
+                    for lead in info['leading']:
+                        comment_parts.append(f'// {lead}')
+
+                    result.append(f'{line}  ; {" ".join(comment_parts)}')
+                    comment_idx += 1
+                else:
+                    result.append(line)
+                continue
+
+            # Detect main function end
+            if in_main and line.strip() == '}':
+                in_main = False
+                result.append(line)
+                continue
+
+            # Skip non-instruction lines
+            if not in_main or not line.strip() or line.strip() == '{' or line.strip() == 'entry:':
+                result.append(line)
+                continue
+
+            # Check if this is a store instruction (skip comment if previous was alloca)
+            is_store = 'store' in line
+
+            if is_store and last_was_alloca:
+                # This store belongs to previous alloca, no comment
+                result.append(line)
+                last_was_alloca = False
+                continue
+
+            # This is a "first" instruction for a statement - add comment
+            if comment_idx < len(self.comment_order):
+                stmt_line = self.comment_order[comment_idx]
+                info = self.line_to_comment[stmt_line]
+
+                # Build complete comment: source + all leading comments
+                # NOTE: source_line already contains inline comments!
+                comment_parts = [info['source']]
+                for lead in info['leading']:
+                    comment_parts.append(f'// {lead}')
+
+                result.append(f'{line}  ; {" ".join(comment_parts)}')
+                comment_idx += 1
+
+                # Track if this was alloca
+                last_was_alloca = 'alloca' in line
+            else:
+                result.append(line)
+                last_was_alloca = False
+
+        return '\n'.join(result)
 
     # ═══════════════════════════════════════════════════════════
     # VISITOR PATTERN
@@ -87,6 +194,10 @@ class LLVMGenerator:
 
     def visit_ProgramNode(self, node: ProgramNode):
         """Bezoek het programma (bevat main function)."""
+        # AANGEPAST: collect comments from includes (but don't process them)
+        for inc in node.includes:
+            self._collect_comments(inc)
+
         self.visit(node.main_function)
 
     def visit_MainFunctionNode(self, node: MainFunctionNode):
@@ -102,6 +213,9 @@ class LLVMGenerator:
               ...
             }
         """
+        # NIEUW: Collect comments
+        self._collect_comments(node)
+
         # Definieer de main functie: int main()
         # i32 = 32-bit integer (return type)
         # [] = geen argumenten
@@ -136,6 +250,9 @@ class LLVMGenerator:
         LLVM IR:
             ret i32 42
         """
+        # NIEUW: Collect comments
+        self._collect_comments(node)
+
         if node.value is None:
             # return; (zonder waarde)
             self.builder.ret_void()
@@ -152,9 +269,12 @@ class LLVMGenerator:
             int x = 5;
 
         LLVM IR:
-            %x = alloca i32        ; reserveer ruimte
-            store i32 5, i32* %x   ; sla waarde op
+            %x = alloca i32        ; int x = 5
+            store i32 5, i32* %x   ;
         """
+        # NIEUW: Collect comments
+        self._collect_comments(node)
+
         # Bepaal LLVM type
         llvm_type = self._get_llvm_type(node.type_name, node.pointer_depth)
 
@@ -179,6 +299,9 @@ class LLVMGenerator:
         LLVM IR:
             store i32 10, i32* %x
         """
+        # NIEUW: Collect comments
+        self._collect_comments(node)
+
         # Haal de pointer naar de variabele op
         if isinstance(node.target, IdentifierNode):
             var_ptr = self.variables[node.target.name]
