@@ -120,7 +120,7 @@ literal
     : INTEGER                           # intLiteral
     | FLOAT_LIT                         # floatLiteral
     | CHAR_LIT                          # charLiteral
-    | STRING_LIT                        # stringLiteral  ← ADD THIS
+    | STRING_LIT                        # stringLiteral
     ;
 
 // ========================================

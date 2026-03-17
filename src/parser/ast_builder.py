@@ -18,6 +18,7 @@ from parser.ast_nodes import (
     CastNode,
     ArrayAccessNode,
     ArrayInitializerNode,
+    StringLiteralNode,
 )
 
 
@@ -333,4 +334,18 @@ class ASTBuilder(CParserVisitor):
         # Strip the surrounding quotes: 'a' -> a
         raw = ctx.CHAR_LIT().getText()
         node = CharLiteralNode(raw[1:-1])
+        return self._attach_position(node, ctx)
+
+    def visitStringLiteral(self, ctx):
+        # Handle string literals
+        raw = ctx.STRING_LIT().getText()
+        # Remove surrounding quotes: "hello" -> hello
+        string_value = raw[1:-1]
+        # Unescape common escape sequences
+        string_value = string_value.replace('\\n', '\n')
+        string_value = string_value.replace('\\t', '\t')
+        string_value = string_value.replace('\\r', '\r')
+        string_value = string_value.replace('\\"', '"')
+        string_value = string_value.replace('\\\\', '\\')
+        node = StringLiteralNode(string_value)
         return self._attach_position(node, ctx)
