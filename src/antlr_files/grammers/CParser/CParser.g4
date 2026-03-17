@@ -120,6 +120,7 @@ literal
     : INTEGER                           # intLiteral
     | FLOAT_LIT                         # floatLiteral
     | CHAR_LIT                          # charLiteral
+    | STRING_LIT                        # stringLiteral  ← ADD THIS
     ;
 
 // ========================================
@@ -135,6 +136,9 @@ MAIN     : 'main' ;
 // Float must be defined before INTEGER
 FLOAT_LIT  : [0-9]+ '.' [0-9]+ ;
 INTEGER    : [0-9]+ ;
+
+// String literal: "hello", "world\n", etc.
+STRING_LIT : '"' ( ~["\\\r\n] | '\\' . )* '"' ;
 
 // Character literal: 'a', 'x', '\n', etc.
 CHAR_LIT   : '\'' ( ~['\\] | '\\' . ) '\'' ;
