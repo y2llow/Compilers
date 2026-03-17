@@ -19,6 +19,9 @@ from parser.ast_nodes import (
     ArrayAccessNode,
     ArrayInitializerNode,
     StringLiteralNode,
+    IncludeNode,
+    PrintfNode,
+    ScanfNode,
 )
 
 class DotVisitor:
@@ -105,11 +108,12 @@ class DotVisitor:
 
     # ── Program structure ─────────────────────────────────────
 
-    def _visit_ProgramNode(self, node: ProgramNode) -> str:
+    def _visit_ProgramNode(self, node):
         node_id = self._new_id()
-        label = "Program"
-        label = self._format_label_with_comments(label, node)
-        self._add_node(node_id, label, shape="rectangle")
+        self._add_node(node_id, "Program", shape="rectangle")
+        for inc in node.includes:
+            child_id = self._visit(inc)
+            self._add_edge(node_id, child_id)
         child_id = self._visit(node.main_function)
         self._add_edge(node_id, child_id)
         return node_id
@@ -299,4 +303,35 @@ class DotVisitor:
         right_id = self._visit(node.right)
         self._add_edge(node_id, left_id)
         self._add_edge(node_id, right_id)
+        return node_id
+
+    # ── Include operations ─────────────────────────────────────
+
+    def _visit_IncludeNode(self, node):
+        node_id = self._new_id()
+        self._add_node(node_id, f"#include <{node.header}>", shape="rectangle")
+        return node_id
+
+    def _visit_PrintfNode(self, node):
+        node_id = self._new_id()
+        display = node.format_string[:20].replace('\n', '\\n')
+        if len(node.format_string) > 20:
+            display += "..."
+        label = f'printf("{display}")'
+        self._add_node(node_id, label, shape="rectangle")
+        for arg in node.args:
+            child_id = self._visit(arg)
+            self._add_edge(node_id, child_id)
+        return node_id
+
+    def _visit_ScanfNode(self, node):
+        node_id = self._new_id()
+        display = node.format_string[:20]
+        if len(node.format_string) > 20:
+            display += "..."
+        label = f'scanf("{display}")'
+        self._add_node(node_id, label, shape="rectangle")
+        for arg in node.args:
+            child_id = self._visit(arg)
+            self._add_edge(node_id, child_id)
         return node_id

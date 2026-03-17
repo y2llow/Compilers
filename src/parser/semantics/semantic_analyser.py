@@ -45,6 +45,7 @@ class SemanticAnalyzer:
         self.symbol_table = SymbolTable()
         self.errors = []
         self.warnings = []
+        self.stdio_included = False
 
     def add_error(self, line, column, message):
         """Voeg semantische fout toe"""
@@ -89,9 +90,6 @@ class SemanticAnalyzer:
 
     # ── Program structure ─────────────────────────────────────
 
-    def visit_ProgramNode(self, node):
-        """Bezoek het programma (main function)"""
-        self.visit(node.main_function)
 
     def visit_MainFunctionNode(self, node):
         """Bezoek main functie - maak nieuwe scope"""
@@ -710,3 +708,55 @@ class SemanticAnalyzer:
             output.append(f"{YELLOW}[Semantic Warning] line {line_num}, column {column}: {message}{RESET}")
 
         return '\n'.join(output) + '\n', len(self.warnings)
+
+    # ── include methods ────────────────────────────────────────
+
+    def visit_ProgramNode(self, node):
+        # Check includes first
+        for inc in node.includes:
+            self.visit(inc)
+        # Then analyse main
+        self.visit(node.main_function)
+
+    def visit_IncludeNode(self, node):
+        if node.header == 'stdio.h':
+            self.stdio_included = True
+
+    def visit_PrintfNode(self, node):
+        if not self.stdio_included:
+            self.add_error(
+                getattr(node, 'line', 0),
+                getattr(node, 'column', 0),
+                "Error: 'printf' used without #include <stdio.h>"
+            )
+            return
+        # Validate format string vs argument count
+        self._check_format_args(node.format_string, node.args, 'printf', node)
+        for arg in node.args:
+            self._check_expression(arg)
+
+    def visit_ScanfNode(self, node):
+        if not self.stdio_included:
+            self.add_error(
+                getattr(node, 'line', 0),
+                getattr(node, 'column', 0),
+                "Error: 'scanf' used without #include <stdio.h>"
+            )
+            return
+        self._check_format_args(node.format_string, node.args, 'scanf', node)
+        for arg in node.args:
+            self._check_expression(arg)
+
+    def _check_format_args(self, fmt: str, args: list, func_name: str, node):
+        """Count format specifiers (%d, %f, %s, %c, %x) and compare to arg count."""
+        import re
+        # Match %[width][code] but not %%
+        specifiers = re.findall(r'(?<!%)%(?:\d+)?[dxsfc]', fmt)
+        expected = len(specifiers)
+        actual = len(args)
+        if expected != actual:
+            self.add_error(
+                getattr(node, 'line', 0),
+                getattr(node, 'column', 0),
+                f"Error: {func_name} format expects {expected} argument(s), got {actual}"
+            )
