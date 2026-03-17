@@ -4,9 +4,14 @@ grammar CParser;
 // PARSER RULES (lowercase)
 // ========================================
 
-// Top-level: a C file has exactly one main function
+// Top-level: a C file has zero or more includes, then exactly one main function
 translation_unit
-    : main_function EOF
+    : include_directive* main_function EOF
+    ;
+
+// #include <stdio.h>
+include_directive
+    : HASH INCLUDE LT_STDIO_H
     ;
 
 main_function
@@ -18,12 +23,33 @@ statement
     : var_decl ';'
     | assignment ';'
     | return_statement
+    | printf_statement ';'
+    | scanf_statement ';'
     | expression ';'
     ;
 
 // Return statement
 return_statement
     : 'return' expression? ';'
+    ;
+
+// ── printf / scanf ────────────────────────────────────────────
+// printf("format", arg1, arg2, ...)
+printf_statement
+    : PRINTF '(' STRING_LIT (',' printf_arg)* ')'
+    ;
+
+printf_arg
+    : unary_expr
+    ;
+
+// scanf("format", &var1, &var2, ...)
+scanf_statement
+    : SCANF '(' STRING_LIT (',' scanf_arg)* ')'
+    ;
+
+scanf_arg
+    : unary_expr
     ;
 
 // ── Variable declaration ──────────────────────────────────────
@@ -97,7 +123,6 @@ unary_expr
     ;
 
 // ── Postfix expressions ───────────────────────────────────────
-// Handles: arr[5], matrix[i][j], arr[5]++, etc.
 postfix_expr
     : primary_expr postfix_op*
     ;
@@ -132,6 +157,15 @@ INT      : 'int' ;
 FLOAT_KW : 'float' ;
 CHAR_KW  : 'char' ;
 MAIN     : 'main' ;
+PRINTF   : 'printf' ;
+SCANF    : 'scanf' ;
+
+// #include <stdio.h> tokens
+HASH          : '#' ;
+INCLUDE       : 'include' ;
+LT_STDIO_H    : '<stdio.h>' ;
+// We need '<' and '>' as tokens for the include, but they are also used
+// in expressions. We handle this by using the combined token LT_STDIO_H above.
 
 // Float must be defined before INTEGER
 FLOAT_LIT  : [0-9]+ '.' [0-9]+ ;
