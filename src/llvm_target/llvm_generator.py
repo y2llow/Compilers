@@ -803,3 +803,52 @@ class LLVMGenerator:
         # Roep printf aan
         printf = self._get_printf()
         self.builder.call(printf, args)
+
+    def _get_scanf(self):
+        """
+        Declareer scanf als die nog niet gedeclareerd is.
+
+        LLVM:
+            declare i32 @scanf(i8*, ...)
+        """
+        if self.scanf_func is None:
+            scanf_type = ir.FunctionType(
+                ir.IntType(32),
+                [ir.IntType(8).as_pointer()],
+                var_arg=True
+            )
+            self.scanf_func = ir.Function(self.module, scanf_type, name="scanf")
+        return self.scanf_func
+
+    def visit_ScanfNode(self, node):
+        """
+        Genereer een scanf aanroep.
+
+        C code:
+            scanf("%d", &x);
+
+        LLVM:
+            %fmt = getelementptr [3 x i8], [3 x i8]* @.str.0, i32 0, i32 0
+            call i32 (i8*, ...) @scanf(i8* %fmt, i32* %x)
+        """
+        self._collect_comments(node)
+
+        # Format string
+        fmt_ptr = self._create_global_string(node.format_string)
+        zero = ir.Constant(ir.IntType(32), 0)
+        fmt_arg = self.builder.gep(fmt_ptr, [zero, zero], inbounds=True)
+
+        # Argumenten — scanf verwacht pointers (&x)
+        args = [fmt_arg]
+        for arg in node.args:
+            if isinstance(arg, AddressOfNode):
+                # &x → geef de pointer naar x direct mee
+                ptr = self.variables[arg.operand.name]
+                args.append(ptr)
+            else:
+                value = self.visit(arg)
+                args.append(value)
+
+        # Roep scanf aan
+        scanf = self._get_scanf()
+        self.builder.call(scanf, args)
