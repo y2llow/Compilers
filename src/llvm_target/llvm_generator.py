@@ -59,6 +59,8 @@ class LLVMGenerator:
         self.line_to_comment = {}
         self.comment_order = []  # Track order of statements
 
+        self.string_counter = 0  # ← NIEUW: teller voor unieke string namen
+
     # ═══════════════════════════════════════════════════════════
     # PUBLIC API
     # ═══════════════════════════════════════════════════════════
@@ -707,3 +709,47 @@ class LLVMGenerator:
         # Zelfde type, niets te doen
         else:
             return value
+
+    def _create_global_string(self, value: str) -> ir.GlobalVariable:
+        """
+        Maak een globale string constante aan.
+
+        C code:
+            "Hello"
+
+        LLVM:
+            @.str.0 = private unnamed_addr constant [6 x i8] c"Hello\00"
+        """
+        # Voeg null-terminator toe
+        encoded = (value + '\00').encode('utf-8')
+        string_type = ir.ArrayType(ir.IntType(8), len(encoded))
+
+        # Unieke naam: @.str.0, @.str.1, etc.
+        name = f".str.{self.string_counter}"
+        self.string_counter += 1
+
+        # Maak globale variabele aan
+        global_str = ir.GlobalVariable(self.module, string_type, name=name)
+        global_str.global_constant = True
+        global_str.linkage = 'private'
+        global_str.unnamed_addr = True
+        global_str.initializer = ir.Constant(string_type, bytearray(encoded))
+
+        return global_str
+
+    def visit_StringLiteralNode(self, node):
+        """
+        Genereer een string literal.
+
+        C code:
+            "Hello"
+
+        LLVM:
+            @.str.0 = private unnamed_addr constant [6 x i8] c"Hello\00"
+            %ptr = getelementptr [6 x i8], [6 x i8]* @.str.0, i32 0, i32 0
+        """
+        global_str = self._create_global_string(node.value)
+
+        # Geef pointer naar het eerste karakter terug
+        zero = ir.Constant(ir.IntType(32), 0)
+        return self.builder.gep(global_str, [zero, zero], inbounds=True)
