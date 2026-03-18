@@ -98,8 +98,9 @@ class ASTBuilder(CParserVisitor):
     # ── Top level ─────────────────────────────────────────────
     def visitTranslation_unit(self, ctx):
         """
-        Parse top-level: main_function OR statements
+        Parse top-level: include_directive* (main_function | statement)* EOF
         """
+        includes = []
         main_fn = None
         statements = []
 
@@ -111,11 +112,15 @@ class ASTBuilder(CParserVisitor):
             if hasattr(child, 'getText') and child.getText() == '<EOF>':
                 continue
 
-            # Check what kind of node this is
             child_type = type(child).__name__
 
+            # If it's an include_directive, collect it
+            if 'Include_directiveContext' in child_type:
+                inc = self.visit(child)
+                if inc is not None:
+                    includes.append(inc)
             # If it's a main_function, save it
-            if 'Main_functionContext' in child_type or hasattr(child, 'MAIN'):
+            elif 'Main_functionContext' in child_type:
                 main_fn = self.visit(child)
             # Otherwise it's a statement
             else:
@@ -125,15 +130,17 @@ class ASTBuilder(CParserVisitor):
 
         # If we have a main function, use it
         if main_fn:
-            program = ProgramNode([], main_fn)  # ← includes=[], main_function=main_fn
+            program = ProgramNode(includes, main_fn)
         else:
             # Otherwise wrap statements in a main function
-            program = ProgramNode([], MainFunctionNode(statements))
+            program = ProgramNode(includes, MainFunctionNode(statements))
 
         return self._attach_position(program, ctx)
 
     def visitInclude_directive(self, ctx):
-        # include_directive: HASH INCLUDE LT_STDIO_H GT
+        """
+        Visit #include <stdio.h>
+        """
         node = IncludeNode('stdio.h')
         return self._attach_position(node, ctx)
 
