@@ -290,6 +290,15 @@ class LLVMGenerator:
         # Als er een initiele waarde is, sla die op
         if node.value is not None:
             value = self.visit(node.value)
+
+            # Automatische type conversie als types niet matchen
+            if isinstance(llvm_type, ir.FloatType) and isinstance(value.type, ir.IntType):
+                # int → float
+                value = self.builder.sitofp(value, ir.FloatType())
+            elif isinstance(llvm_type, ir.IntType) and isinstance(value.type, ir.FloatType):
+                # float → int (verlies van informatie, maar grammar laat het toe)
+                value = self.builder.fptosi(value, ir.IntType(32))
+
             self.builder.store(value, var_ptr)
 
     def visit_AssignNode(self, node: AssignNode):
