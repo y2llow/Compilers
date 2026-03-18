@@ -25,6 +25,8 @@ from parser.ast_nodes import (
     AddressOfNode,
     DereferenceNode,
     CastNode,
+    ArrayAccessNode,
+    ArrayInitializerNode,
 )
 
 
@@ -270,41 +272,97 @@ class LLVMGenerator:
             self.builder.ret(value)
 
     def visit_VarDeclNode(self, node: VarDeclNode):
-        """
-        Genereer een variabele declaratie.
-
-        C code:
-            int x = 5;
-
-        LLVM IR:
-            %x = alloca i32        ; int x = 5
-            store i32 5, i32* %x   ;
-        """
-        # NIEUW: Collect comments
         self._collect_comments(node)
 
-        # Bepaal LLVM type
-        llvm_type = self._get_llvm_type(node.type_name, node.pointer_depth)
+        # Array declaratie
+        if node.array_dimensions:
+            # Bouw het array type op van binnen naar buiten
+            # bijv. int arr[2][3] → [2 x [3 x i32]]
+            base_type = self._get_llvm_type(node.type_name, node.pointer_depth)
+            array_type = base_type
+            for dim in reversed(node.array_dimensions):
+                array_type = ir.ArrayType(array_type, dim)
 
-        # Alloceer ruimte voor de variabele
-        var_ptr = self.builder.alloca(llvm_type, name=node.name)
+            # Alloceer het array
+            var_ptr = self.builder.alloca(array_type, name=node.name)
+            self.variables[node.name] = var_ptr
 
-        # Sla op in symbol table
-        self.variables[node.name] = var_ptr
+            # Initialisatie indien aanwezig
+            if node.value is not None:
+                self._init_array(var_ptr, array_type, node.value, node.array_dimensions)
 
-        # Als er een initiele waarde is, sla die op
-        if node.value is not None:
-            value = self.visit(node.value)
+        else:
+            # Gewone variabele (zoals voorheen)
+            llvm_type = self._get_llvm_type(node.type_name, node.pointer_depth)
+            var_ptr = self.builder.alloca(llvm_type, name=node.name)
+            self.variables[node.name] = var_ptr
 
-            # Automatische type conversie als types niet matchen
-            if isinstance(llvm_type, ir.FloatType) and isinstance(value.type, ir.IntType):
-                # int → float
-                value = self.builder.sitofp(value, ir.FloatType())
-            elif isinstance(llvm_type, ir.IntType) and isinstance(value.type, ir.FloatType):
-                # float → int (verlies van informatie, maar grammar laat het toe)
-                value = self.builder.fptosi(value, ir.IntType(32))
+            if node.value is not None:
+                value = self.visit(node.value)
 
-            self.builder.store(value, var_ptr)
+                # Automatische type conversie
+                if isinstance(llvm_type, ir.FloatType) and isinstance(value.type, ir.IntType):
+                    value = self.builder.sitofp(value, ir.FloatType())
+                elif isinstance(llvm_type, ir.IntType) and isinstance(value.type, ir.FloatType):
+                    value = self.builder.fptosi(value, ir.IntType(32))
+
+                self.builder.store(value, var_ptr)
+
+    def _init_array(self, var_ptr, array_type, initializer, dimensions):
+        """
+        Initialiseer een array met een ArrayInitializerNode.
+        Werkt recursief voor multi-dimensionale arrays.
+        """
+        for i, elem in enumerate(initializer.elements):
+            # Bereken het adres van element i
+            idx = ir.Constant(ir.IntType(32), i)
+            zero = ir.Constant(ir.IntType(32), 0)
+            elem_ptr = self.builder.gep(var_ptr, [zero, idx], inbounds=True)
+
+            if isinstance(elem, ArrayInitializerNode):
+                # Multi-dimensionaal: recursief initialiseren
+                inner_type = array_type.element
+                self._init_array(elem_ptr, inner_type, elem, dimensions[1:])
+            else:
+                # Gewone waarde opslaan
+                value = self.visit(elem)
+                self.builder.store(value, elem_ptr)
+
+    def visit_ArrayAccessNode(self, node: ArrayAccessNode):
+        """
+        arr[i] of matrix[i][j]
+
+        LLVM:
+            %ptr = getelementptr [5 x i32], [5 x i32]* %arr, i32 0, i32 i
+            %val = load i32, i32* %ptr
+        """
+        # Haal de pointer op naar het array
+        # Kan genest zijn: matrix[i][j] → ArrayAccess(ArrayAccess(matrix, i), j)
+        if isinstance(node.array, IdentifierNode):
+            arr_ptr = self.variables[node.array.name]
+        else:
+            # Geneste array access: eerst de binnenste pointer berekenen
+            arr_ptr = self._get_array_ptr(node.array)
+
+        index = self.visit(node.index)
+        zero = ir.Constant(ir.IntType(32), 0)
+        elem_ptr = self.builder.gep(arr_ptr, [zero, index], inbounds=True)
+
+        return self.builder.load(elem_ptr)
+
+    def _get_array_ptr(self, node):
+        """
+        Geeft de pointer naar een array element terug zonder te laden.
+        Gebruikt voor geneste array access (multi-dim).
+        """
+        if isinstance(node, IdentifierNode):
+            return self.variables[node.name]
+
+        # ArrayAccessNode: bereken de pointer naar dit element
+        arr_ptr = self._get_array_ptr(node.array)
+        index = self.visit(node.index)
+        zero = ir.Constant(ir.IntType(32), 0)
+        return self.builder.gep(arr_ptr, [zero, index], inbounds=True)
 
     def visit_AssignNode(self, node: AssignNode):
         self._collect_comments(node)
@@ -316,12 +374,24 @@ class LLVMGenerator:
             self.builder.store(value, var_ptr)
 
         elif isinstance(node.target, DereferenceNode):
-            # Dereference assignment: *ptr = 10
-            # Laad de pointer, sla de waarde op via die pointer
+            # Pointer assignment: *ptr = 10
             ptr_value = self.variables[node.target.operand.name]
             ptr_loaded = self.builder.load(ptr_value)
             value = self.visit(node.value)
             self.builder.store(value, ptr_loaded)
+
+        elif isinstance(node.target, ArrayAccessNode):
+            # Array assignment: arr[i] = 10
+            elem_ptr = self._get_array_ptr(node.target)
+            index = self.visit(node.target.index)
+            zero = ir.Constant(ir.IntType(32), 0)
+            if isinstance(node.target.array, IdentifierNode):
+                arr_ptr = self.variables[node.target.array.name]
+            else:
+                arr_ptr = self._get_array_ptr(node.target.array)
+            elem_ptr = self.builder.gep(arr_ptr, [zero, index], inbounds=True)
+            value = self.visit(node.value)
+            self.builder.store(value, elem_ptr)
 
         else:
             raise NotImplementedError("Assignment naar dit type nog niet ondersteund")
