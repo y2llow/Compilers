@@ -4,9 +4,9 @@ grammar CParser;
 // PARSER RULES (lowercase)
 // ========================================
 
-// Top-level: a C file has zero or more includes, then exactly one main function
+// Top-level: includes followed by main function and/or statements
 translation_unit
-    : (main_function | statement)* EOF
+    : include_directive* (main_function | statement)* EOF
     ;
 
 // #include <stdio.h>
