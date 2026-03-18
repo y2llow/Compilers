@@ -243,9 +243,8 @@ class ASTBuilder(CParserVisitor):
     def visitLogicalOr(self, ctx):
         return self._binary(ctx)
 
-    def visitPostfixExpr(self, ctx):
-        # Just pass through to postfix_expr rule
-        return self.visit(ctx.postfix_expr())
+    def visitUnaryExpr(self, ctx):
+        return self.visit(ctx.unary_expr())
 
     # ── Unary expressions ─────────────────────────────────────
 

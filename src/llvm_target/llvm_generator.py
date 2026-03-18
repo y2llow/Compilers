@@ -18,6 +18,7 @@ from parser.ast_nodes import (
     AssignNode,
     IdentifierNode,
     BinaryOpNode,
+    UnaryOpNode,
 )
 
 
@@ -355,28 +356,127 @@ class LLVMGenerator:
         """
         Genereer een binaire operatie.
 
-        C code:
-            x + y
-
-        LLVM IR:
-            %1 = add i32 %x, %y
+        Integer arithmetic:  add, sub, mul, sdiv, srem
+        Float arithmetic:    fadd, fsub, fmul, fdiv
+        Comparison (int):    icmp → zext naar i32
+        Comparison (float):  fcmp → zext naar i32
+        Logical:             and, or (na bool-conversie)
+        Bitwise:             and, or, xor
+        Shift:               shl, ashr
         """
         left = self.visit(node.left)
         right = self.visit(node.right)
 
-        # Integer operaties
+        # Bepaal of we met floats werken
+        is_float = isinstance(left.type, ir.FloatType) or isinstance(right.type, ir.FloatType)
+
+        # Als één kant float is, zet de andere ook om naar float
+        if is_float:
+            if isinstance(left.type, ir.IntType):
+                left = self.builder.sitofp(left, ir.FloatType())
+            if isinstance(right.type, ir.IntType):
+                right = self.builder.sitofp(right, ir.FloatType())
+
+        # ── Arithmetic ──────────────────────────────────────────
         if node.op == '+':
-            return self.builder.add(left, right)
+            return self.builder.fadd(left, right) if is_float else self.builder.add(left, right)
         elif node.op == '-':
-            return self.builder.sub(left, right)
+            return self.builder.fsub(left, right) if is_float else self.builder.sub(left, right)
         elif node.op == '*':
-            return self.builder.mul(left, right)
+            return self.builder.fmul(left, right) if is_float else self.builder.mul(left, right)
         elif node.op == '/':
-            return self.builder.sdiv(left, right)  # signed division
+            return self.builder.fdiv(left, right) if is_float else self.builder.sdiv(left, right)
         elif node.op == '%':
-            return self.builder.srem(left, right)  # signed remainder
+            # % niet geldig voor floats in C
+            return self.builder.srem(left, right)
+
+        # ── Comparison ──────────────────────────────────────────
+        # icmp/fcmp geeft i1 terug → zext naar i32 voor C-compatibiliteit
+        elif node.op in ('==', '!=', '<', '>', '<=', '>='):
+            if is_float:
+                cmp_map = {
+                    '==': 'oeq', '!=': 'one',
+                    '<': 'olt', '>': 'ogt',
+                    '<=': 'ole', '>=': 'oge',
+                }
+                cmp_result = self.builder.fcmp_ordered(cmp_map[node.op], left, right)
+            else:
+                cmp_map = {
+                    '==': '==', '!=': '!=',
+                    '<': '<', '>': '>',
+                    '<=': '<=', '>=': '>=',
+                }
+                cmp_result = self.builder.icmp_signed(cmp_map[node.op], left, right)
+            # i1 → i32
+            return self.builder.zext(cmp_result, ir.IntType(32))
+
+        # ── Logical ─────────────────────────────────────────────
+        # && en || werken op bools: zet operanden eerst naar i1
+        elif node.op == '&&':
+            left_bool = self.builder.icmp_signed('!=', left, ir.Constant(ir.IntType(32), 0))
+            right_bool = self.builder.icmp_signed('!=', right, ir.Constant(ir.IntType(32), 0))
+            result = self.builder.and_(left_bool, right_bool)
+            return self.builder.zext(result, ir.IntType(32))
+        elif node.op == '||':
+            left_bool = self.builder.icmp_signed('!=', left, ir.Constant(ir.IntType(32), 0))
+            right_bool = self.builder.icmp_signed('!=', right, ir.Constant(ir.IntType(32), 0))
+            result = self.builder.or_(left_bool, right_bool)
+            return self.builder.zext(result, ir.IntType(32))
+
+        # ── Bitwise ─────────────────────────────────────────────
+        elif node.op == '&':
+            return self.builder.and_(left, right)
+        elif node.op == '|':
+            return self.builder.or_(left, right)
+        elif node.op == '^':
+            return self.builder.xor(left, right)
+
+        # ── Shift ───────────────────────────────────────────────
+        elif node.op == '<<':
+            return self.builder.shl(left, right)
+        elif node.op == '>>':
+            return self.builder.ashr(left, right)  # arithmetic shift right (signed)
+
         else:
             raise NotImplementedError(f"Operator {node.op} nog niet ondersteund")
+
+    def visit_UnaryOpNode(self, node: UnaryOpNode):
+        """
+        Genereer een unaire operatie.
+
+        -x  → neg (int) of fneg (float)
+        +x  → noop, gewoon x teruggeven
+        !x  → icmp eq x, 0  dan zext naar i32
+        ~x  → xor x, -1
+        """
+        operand = self.visit(node.operand)
+        is_float = isinstance(operand.type, ir.FloatType)
+
+        if node.op == '-':
+            if is_float:
+                return self.builder.fneg(operand)
+            else:
+                # neg = 0 - x
+                zero = ir.Constant(ir.IntType(32), 0)
+                return self.builder.sub(zero, operand)
+
+        elif node.op == '+':
+            # Unaire + doet niets
+            return operand
+
+        elif node.op == '!':
+            # !x  →  (x == 0) ? 1 : 0
+            zero = ir.Constant(ir.IntType(32), 0)
+            cmp_result = self.builder.icmp_signed('==', operand, zero)
+            return self.builder.zext(cmp_result, ir.IntType(32))
+
+        elif node.op == '~':
+            # ~x  →  x XOR -1 (bitwise NOT)
+            minus_one = ir.Constant(ir.IntType(32), -1)
+            return self.builder.xor(operand, minus_one)
+
+        else:
+            raise NotImplementedError(f"Unaire operator {node.op} nog niet ondersteund")
 
     # ═══════════════════════════════════════════════════════════
     # HELPER METHODS

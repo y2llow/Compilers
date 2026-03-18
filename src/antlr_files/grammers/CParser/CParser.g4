@@ -106,7 +106,7 @@ expression
     | expression '|' expression                        # bitwiseOr
     | expression '&&' expression                       # logicalAnd
     | expression '||' expression                       # logicalOr
-    | postfix_expr                                     # postfixExpr
+    | unary_expr                                       # unaryExpr
     ;
 
 // ── Unary expressions ─────────────────────────────────────────
