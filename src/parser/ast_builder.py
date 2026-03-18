@@ -96,11 +96,41 @@ class ASTBuilder(CParserVisitor):
         return node
 
     # ── Top level ─────────────────────────────────────────────
-
     def visitTranslation_unit(self, ctx):
-        includes = [self.visit(inc) for inc in ctx.include_directive()]
-        main_fn = self.visit(ctx.main_function())
-        return ProgramNode(includes, main_fn)
+        """
+        Parse top-level: main_function OR statements
+        """
+        main_fn = None
+        statements = []
+
+        # Visit all children
+        for i in range(ctx.getChildCount()):
+            child = ctx.getChild(i)
+
+            # Skip EOF
+            if hasattr(child, 'getText') and child.getText() == '<EOF>':
+                continue
+
+            # Check what kind of node this is
+            child_type = type(child).__name__
+
+            # If it's a main_function, save it
+            if 'Main_functionContext' in child_type or hasattr(child, 'MAIN'):
+                main_fn = self.visit(child)
+            # Otherwise it's a statement
+            else:
+                result = self.visit(child)
+                if result is not None:
+                    statements.append(result)
+
+        # If we have a main function, use it
+        if main_fn:
+            program = ProgramNode([], main_fn)  # ← includes=[], main_function=main_fn
+        else:
+            # Otherwise wrap statements in a main function
+            program = ProgramNode([], MainFunctionNode(statements))
+
+        return self._attach_position(program, ctx)
 
     def visitInclude_directive(self, ctx):
         # include_directive: HASH INCLUDE LT_STDIO_H GT

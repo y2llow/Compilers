@@ -6,7 +6,7 @@ grammar CParser;
 
 // Top-level: a C file has zero or more includes, then exactly one main function
 translation_unit
-    : include_directive* main_function EOF
+    : (main_function | statement)* EOF
     ;
 
 // #include <stdio.h>
@@ -19,12 +19,14 @@ main_function
     ;
 
 // ── Statements ───────────────────────────────────────────────
+// KEY: Added unary_expr BEFORE expression to catch unary statements first
 statement
     : var_decl ';'
     | assignment ';'
     | return_statement
     | printf_statement ';'
     | scanf_statement ';'
+    | unary_expr ';'
     | expression ';'
     ;
 
@@ -164,23 +166,21 @@ SCANF    : 'scanf' ;
 HASH          : '#' ;
 INCLUDE       : 'include' ;
 LT_STDIO_H    : '<stdio.h>' ;
-// We need '<' and '>' as tokens for the include, but they are also used
-// in expressions. We handle this by using the combined token LT_STDIO_H above.
 
 // Float must be defined before INTEGER
 FLOAT_LIT  : [0-9]+ '.' [0-9]+ ;
 INTEGER    : [0-9]+ ;
 
 // String literal: "hello", "world\n", etc.
-STRING_LIT : '"' ( ~["\\\r\n] | '\\' . )* '"' ;
+STRING_LIT : '"' ( '\\' . | ~["\\\r\n] )* '"' ;
 
 // Character literal: 'a', 'x', '\n', etc.
-CHAR_LIT   : '\'' ( ~['\\] | '\\' . ) '\'' ;
+CHAR_LIT   : '\'' ( '\\' . | ~['\\\r\n] ) '\'' ;
 
 // Identifier
 IDENTIFIER : [a-zA-Z_][a-zA-Z_0-9]* ;
 
 // Whitespace and comments
-WS            : [ \t\r\n]+  -> skip ;
+WS            : [ \t\r\n]+ -> skip ;
 LINE_COMMENT  : '//' ~[\r\n]* -> channel(HIDDEN) ;
 BLOCK_COMMENT : '/*' .*? '*/' -> channel(HIDDEN) ;
