@@ -61,6 +61,9 @@ class LLVMGenerator:
 
         self.string_counter = 0  # ← NIEUW: teller voor unieke string namen
 
+        self.printf_func = None  # ← NIEUW
+        self.scanf_func = None  # ← NIEUW (alvast voor scanf)
+
     # ═══════════════════════════════════════════════════════════
     # PUBLIC API
     # ═══════════════════════════════════════════════════════════
@@ -753,3 +756,50 @@ class LLVMGenerator:
         # Geef pointer naar het eerste karakter terug
         zero = ir.Constant(ir.IntType(32), 0)
         return self.builder.gep(global_str, [zero, zero], inbounds=True)
+
+    def _get_printf(self):
+        """
+        Declareer printf als die nog niet gedeclareerd is.
+
+        LLVM:
+            declare i32 @printf(i8*, ...)
+        """
+        if self.printf_func is None:
+            printf_type = ir.FunctionType(
+                ir.IntType(32),  # return type: int
+                [ir.IntType(8).as_pointer()],  # eerste argument: char*
+                var_arg=True  # varargs: ...
+            )
+            self.printf_func = ir.Function(self.module, printf_type, name="printf")
+        return self.printf_func
+
+    def visit_PrintfNode(self, node):
+        """
+        Genereer een printf aanroep.
+
+        C code:
+            printf("Hello %d\n", x);
+
+        LLVM:
+            %fmt = getelementptr [10 x i8], [10 x i8]* @.str.0, i32 0, i32 0
+            call i32 (i8*, ...) @printf(i8* %fmt, i32 %x)
+        """
+        self._collect_comments(node)
+
+        # Maak de format string aan als globale constante
+        fmt_ptr = self._create_global_string(node.format_string)
+        zero = ir.Constant(ir.IntType(32), 0)
+        fmt_arg = self.builder.gep(fmt_ptr, [zero, zero], inbounds=True)
+
+        # Verwerk de argumenten
+        args = [fmt_arg]
+        for arg in node.args:
+            value = self.visit(arg)
+            # Float moet gepromoveerd worden naar double voor printf varargs
+            if isinstance(value.type, ir.FloatType):
+                value = self.builder.fpext(value, ir.DoubleType())
+            args.append(value)
+
+        # Roep printf aan
+        printf = self._get_printf()
+        self.builder.call(printf, args)
