@@ -8,6 +8,7 @@ NIEUW: Comments from source code are now embedded in LLVM output
 """
 
 from llvmlite import ir
+import llvmlite.binding as llvm
 from parser.ast_nodes import (
     ProgramNode,
     MainFunctionNode,
@@ -38,6 +39,7 @@ class LLVMGenerator:
     def __init__(self):
         # Maak een nieuwe LLVM module (= een bestand)
         self.module = ir.Module(name="main_module")
+        self.module.triple = llvm.get_default_triple()
 
         # Builder wordt gebruikt om instructies toe te voegen
         self.builder = None
