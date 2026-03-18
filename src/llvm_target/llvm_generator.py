@@ -20,6 +20,11 @@ from parser.ast_nodes import (
     IdentifierNode,
     BinaryOpNode,
     UnaryOpNode,
+    IncrementNode,
+    DecrementNode,
+    AddressOfNode,
+    DereferenceNode,
+    CastNode,
 )
 
 
@@ -302,25 +307,24 @@ class LLVMGenerator:
             self.builder.store(value, var_ptr)
 
     def visit_AssignNode(self, node: AssignNode):
-        """
-        Genereer een assignment.
-
-        C code:
-            x = 10;
-
-        LLVM IR:
-            store i32 10, i32* %x
-        """
-        # NIEUW: Collect comments
         self._collect_comments(node)
 
-        # Haal de pointer naar de variabele op
         if isinstance(node.target, IdentifierNode):
+            # Gewone assignment: x = 10
             var_ptr = self.variables[node.target.name]
             value = self.visit(node.value)
             self.builder.store(value, var_ptr)
+
+        elif isinstance(node.target, DereferenceNode):
+            # Dereference assignment: *ptr = 10
+            # Laad de pointer, sla de waarde op via die pointer
+            ptr_value = self.variables[node.target.operand.name]
+            ptr_loaded = self.builder.load(ptr_value)
+            value = self.visit(node.value)
+            self.builder.store(value, ptr_loaded)
+
         else:
-            raise NotImplementedError("Assignment naar niet-identifier nog niet ondersteund")
+            raise NotImplementedError("Assignment naar dit type nog niet ondersteund")
 
     # ═══════════════════════════════════════════════════════════
     # EXPRESSIONS
@@ -518,3 +522,118 @@ class LLVMGenerator:
             base_type = base_type.as_pointer()
 
         return base_type
+
+    def visit_IncrementNode(self, node: IncrementNode):
+        """
+        x++ of ++x
+
+        C code:
+            x++   → geeft oude waarde terug, slaat nieuwe op
+            ++x   → geeft nieuwe waarde terug, slaat nieuwe op
+        """
+        # Haal de pointer op naar de variabele
+        var_ptr = self.variables[node.operand.name]
+
+        # Laad de huidige waarde
+        old_value = self.builder.load(var_ptr)
+
+        # Tel 1 op
+        one = ir.Constant(ir.IntType(32), 1)
+        new_value = self.builder.add(old_value, one)
+
+        # Sla nieuwe waarde op
+        self.builder.store(new_value, var_ptr)
+
+        # Prefix (++x) → geef nieuwe waarde terug
+        # Postfix (x++) → geef oude waarde terug
+        return new_value if node.prefix else old_value
+
+    def visit_DecrementNode(self, node: DecrementNode):
+        """
+        x-- of --x
+
+        C code:
+            x--   → geeft oude waarde terug, slaat nieuwe op
+            --x   → geeft nieuwe waarde terug, slaat nieuwe op
+        """
+        # Haal de pointer op naar de variabele
+        var_ptr = self.variables[node.operand.name]
+
+        # Laad de huidige waarde
+        old_value = self.builder.load(var_ptr)
+
+        # Trek 1 af
+        one = ir.Constant(ir.IntType(32), 1)
+        new_value = self.builder.sub(old_value, one)
+
+        # Sla nieuwe waarde op
+        self.builder.store(new_value, var_ptr)
+
+        # Prefix (--x) → geef nieuwe waarde terug
+        # Postfix (x--) → geef oude waarde terug
+        return new_value if node.prefix else old_value
+
+    def visit_AddressOfNode(self, node: AddressOfNode):
+        """
+        &x → geeft het adres (pointer) van x terug
+
+        C code:
+            int* ptr = &x;
+
+        LLVM:
+            %ptr = alloca i32*
+            store i32* %x, i32** %ptr
+        """
+        # De pointer naar x zit al in onze symbol table
+        # Dat IS al het adres van x
+        return self.variables[node.operand.name]
+
+    def visit_DereferenceNode(self, node: DereferenceNode):
+        """
+        *ptr → laad de waarde waar ptr naar wijst
+
+        C code:
+            int y = *ptr;
+
+        LLVM:
+            %1 = load i32*, i32** %ptr   ; laad de pointer zelf
+            %2 = load i32, i32* %1       ; laad de waarde via de pointer
+        """
+        # Laad eerst de pointer zelf
+        ptr_value = self.visit(node.operand)
+
+        # Laad dan de waarde waar de pointer naar wijst
+        return self.builder.load(ptr_value)
+
+    def visit_CastNode(self, node: CastNode):
+        """
+        Expliciete type cast.
+
+        C code:
+            (int)3.14    → fptosi
+            (float)5     → sitofp
+            (char)300    → trunc naar i8
+        """
+        value = self.visit(node.operand)
+        target_type = self._get_llvm_type(node.type_name, node.pointer_depth)
+
+        # Float → Int
+        if isinstance(value.type, ir.FloatType) and isinstance(target_type, ir.IntType):
+            return self.builder.fptosi(value, target_type)
+
+        # Int → Float
+        elif isinstance(value.type, ir.IntType) and isinstance(target_type, ir.FloatType):
+            return self.builder.sitofp(value, target_type)
+
+        # Int → Int (bijv. int naar char = trunc, char naar int = sext)
+        elif isinstance(value.type, ir.IntType) and isinstance(target_type, ir.IntType):
+            if value.type.width > target_type.width:
+                return self.builder.trunc(value, target_type)
+            elif value.type.width < target_type.width:
+                return self.builder.sext(value, target_type)
+            else:
+                return value  # zelfde grootte, niets te doen
+
+        # Zelfde type, niets te doen
+        else:
+            return value

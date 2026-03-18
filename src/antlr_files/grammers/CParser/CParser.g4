@@ -93,7 +93,7 @@ type_spec
 
 // ── Assignment ───────────────────────────────────────────────
 assignment
-    : postfix_expr '=' expression
+    : unary_expr '=' expression
     ;
 
 // ── Expressions ───────────────────────────────────────────────

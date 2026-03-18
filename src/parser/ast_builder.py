@@ -234,8 +234,7 @@ class ASTBuilder(CParserVisitor):
     # ── Assignment ────────────────────────────────────────────
 
     def visitAssignment(self, ctx):
-        # assignment: postfix_expr '=' expression
-        target = self.visit(ctx.postfix_expr())
+        target = self.visit(ctx.unary_expr())
         value = self.visit(ctx.expression())
         node = AssignNode(target, value)
         return self._attach_position(node, ctx)

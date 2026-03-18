@@ -146,19 +146,16 @@ class ConstantFolder:
         return node
 
     def visit_AddressOfNode(self, node: AddressOfNode) -> AddressOfNode:
-        node.operand = self.visit(node.operand)
         return node
 
     def visit_IncrementNode(self, node: IncrementNode) -> IncrementNode:
-        node.operand = self.visit(node.operand)
-        # After increment the value of the variable is no longer known
+        # Niet folden — operand moet variabele blijven
         if isinstance(node.operand, IdentifierNode):
             self._known.pop(node.operand.name, None)
         return node
 
     def visit_DecrementNode(self, node: DecrementNode) -> DecrementNode:
-        node.operand = self.visit(node.operand)
-        # After decrement the value of the variable is no longer known
+        # Niet folden — operand moet variabele blijven
         if isinstance(node.operand, IdentifierNode):
             self._known.pop(node.operand.name, None)
         return node
