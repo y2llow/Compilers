@@ -192,6 +192,8 @@ class SemanticAnalyzer:
         # Check linker kant (target) - moet lvalue zijn
         self._check_lvalue(node.target)
 
+        self._check_expression(node.value)
+        
         # Get target type
         target_type = self._get_lvalue_type(node.target)
 
@@ -226,10 +228,8 @@ class SemanticAnalyzer:
         self._check_expression(node.operand)
 
     def visit_DereferenceNode(self, node):
-        """Bezoek dereference operatie"""
         expr_type = self._get_expression_type(node.operand)
 
-        # Dereference vereist een pointer
         if expr_type is not None:
             base_type, ptr_depth = expr_type
             if ptr_depth == 0:
@@ -546,6 +546,15 @@ class SemanticAnalyzer:
             self._check_expression(node.operand)
         elif isinstance(node, DereferenceNode):
             self._check_expression(node.operand)
+            operand_type = self._get_expression_type(node.operand)
+            if operand_type is not None:
+                base_type, ptr_depth = operand_type
+                if ptr_depth == 0:
+                    self.add_error(
+                        getattr(node, 'line', 0),
+                        getattr(node, 'column', 0),
+                        f"Error: cannot dereference non-pointer type '{base_type}'"
+                    )
         elif isinstance(node, AddressOfNode):
             self._check_expression(node.operand)
         elif isinstance(node, IncrementNode):
@@ -598,7 +607,10 @@ class SemanticAnalyzer:
                 return
 
             # Check of variabele const is
-            if symbol.is_const:
+            # Check of variabele const is
+            # const int* mag wel herassigned worden (de pointer is mutable, de waarde niet)
+            # alleen const zonder pointer is volledig immutable
+            if symbol.is_const and symbol.pointer_depth == 0:
                 self.add_error(
                     getattr(node, 'line', 0),
                     getattr(node, 'column', 0),

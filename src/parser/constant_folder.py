@@ -142,7 +142,8 @@ class ConstantFolder:
         return node
 
     def visit_DereferenceNode(self, node: DereferenceNode) -> DereferenceNode:
-        node.operand = self.visit(node.operand)
+        # Niet folden! De operand moet een variabele blijven,
+        # want *x = dereference van x, niet *54
         return node
 
     def visit_AddressOfNode(self, node: AddressOfNode) -> AddressOfNode:
@@ -192,8 +193,10 @@ class ConstantFolder:
             case '&':  return left &  right
             case '|':  return left |  right
             case '^':  return left ^  right
-            case '<<': return left << right
-            case '>>': return left >> right
+            case '<<':
+                return left << right if right >= 0 else left >> (-right)
+            case '>>':
+                return left >> right if right >= 0 else left << (-right)
             case _:    raise ValueError(f"Unknown binary operator: {op}")
 
     # ── Evaluation helpers ────────────────────────────────────

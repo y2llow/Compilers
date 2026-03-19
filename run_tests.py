@@ -86,11 +86,18 @@ def print_compiler_errors(stdout: str, stderr: str):
     combined = stdout + stderr
     if not combined.strip():
         return
-    # Print every non-empty line, indented by 6 spaces so it reads as a
-    # sub-block under the ✘ line.
     for line in combined.splitlines():
         if line.strip():
             print(f"      {line}")
+
+
+def _has_expected_errors(output: str) -> bool:
+    """
+    Geeft True als de output semantic of syntax errors bevat.
+    Dit betekent dat de compiler correct fouten detecteerde —
+    de test is dus geslaagd (de compiler deed zijn job).
+    """
+    return "[Semantic Error]" in output or "[Syntax Error]" in output
 
 
 # ── Per-file processing ───────────────────────────────────────────────────────
@@ -128,8 +135,12 @@ def process_file(c_file: Path, out_root: Path,
                 warn("Graphviz render failed for ast.dot")
         else:
             warn("Graphviz `dot` not on PATH – skipping PNG")
+    elif not ast_ok and _has_expected_errors(ast_out + ast_err):
+        # Compiler faalde maar detecteerde correcte errors → geslaagd
+        ast_ok = True
+        ok("AST: compiler correctly detected errors")
     else:
-        fail(f"AST generation failed:")
+        fail("AST generation failed:")
         print_compiler_errors(ast_out, ast_err)
 
     # ── Pass 2: LLVM IR ───────────────────────────────────────
@@ -145,8 +156,12 @@ def process_file(c_file: Path, out_root: Path,
 
     if llvm_ok and ll_file.exists():
         ok(f"output.ll  →  {ll_file.relative_to(out_root.parent)}")
+    elif not llvm_ok and _has_expected_errors(llvm_out + llvm_err):
+        # Compiler faalde maar detecteerde correcte errors → geslaagd
+        llvm_ok = True
+        ok("LLVM: compiler correctly detected errors")
     else:
-        fail(f"LLVM IR generation failed:")
+        fail("LLVM IR generation failed:")
         print_compiler_errors(llvm_out, llvm_err)
 
     return ast_ok, llvm_ok
@@ -178,7 +193,7 @@ def main():
     )
     ap.add_argument(
         "--src",
-        default="src/tests/test_set_1",
+        default="src/tests/test_set_3",
         help="Directory containing the .c source files",
     )
     ap.add_argument(

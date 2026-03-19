@@ -27,6 +27,7 @@ from parser.ast_nodes import (
     CastNode,
     ArrayAccessNode,
     ArrayInitializerNode,
+    CharLiteralNode,
 )
 
 
@@ -310,6 +311,11 @@ class LLVMGenerator:
                     value = self.builder.sitofp(value, ir.FloatType())
                 elif isinstance(llvm_type, ir.IntType) and isinstance(value.type, ir.FloatType):
                     value = self.builder.fptosi(value, ir.IntType(32))
+                elif isinstance(llvm_type, ir.IntType) and isinstance(value.type, ir.IntType):
+                    if llvm_type.width != value.type.width:
+                        value = self.builder.sext(value,
+                                                  llvm_type) if llvm_type.width > value.type.width else self.builder.trunc(
+                            value, llvm_type)
 
                 self.builder.store(value, var_ptr)
 
@@ -373,10 +379,18 @@ class LLVMGenerator:
         self._collect_comments(node)
 
         if isinstance(node.target, IdentifierNode):
-            # Gewone assignment: x = 10
             var_ptr = self.variables[node.target.name]
             value = self.visit(node.value)
+
+            # Automatische type conversie als types niet matchen
+            target_llvm_type = var_ptr.type.pointee
+            if isinstance(target_llvm_type, ir.FloatType) and isinstance(value.type, ir.IntType):
+                value = self.builder.sitofp(value, ir.FloatType())
+            elif isinstance(target_llvm_type, ir.IntType) and isinstance(value.type, ir.FloatType):
+                value = self.builder.fptosi(value, ir.IntType(32))
+
             self.builder.store(value, var_ptr)
+
 
         elif isinstance(node.target, DereferenceNode):
             # Pointer assignment: *ptr = 10
@@ -428,6 +442,24 @@ class LLVMGenerator:
             float 3.14
         """
         return ir.Constant(ir.FloatType(), node.value)
+
+    def visit_CharLiteralNode(self, node):
+        value = node.value
+        # Zet escape sequences om naar hun ASCII waarde
+        escape_map = {
+            '\\n': 10,  # newline
+            '\\t': 9,  # tab
+            '\\r': 13,  # carriage return
+            '\\0': 0,  # null
+            '\\\\': 92,  # backslash
+            "\\'": 39,  # single quote
+            '\\"': 34,  # double quote
+        }
+        if value in escape_map:
+            char_val = escape_map[value]
+        else:
+            char_val = ord(value)
+        return ir.Constant(ir.IntType(8), char_val)
 
     def visit_IdentifierNode(self, node: IdentifierNode):
         """
