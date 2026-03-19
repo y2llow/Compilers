@@ -413,7 +413,7 @@ class ASTBuilder(CParserVisitor):
         return self._attach_position(node, ctx)
 
     def visitPrintf_arg(self, ctx):
-        return self.visit(ctx.unary_expr())
+        return self.visit(ctx.expression())
 
     def visitScanf_statement(self, ctx):
         # scanf_statement: SCANF '(' STRING_LIT (',' scanf_arg)* ')'
@@ -424,7 +424,7 @@ class ASTBuilder(CParserVisitor):
         return self._attach_position(node, ctx)
 
     def visitScanf_arg(self, ctx):
-        return self.visit(ctx.unary_expr())
+        return self.visit(ctx.expression())
 
     # Helper (can be a module-level function or reuse the existing logic
     # from visitStringLiteral):

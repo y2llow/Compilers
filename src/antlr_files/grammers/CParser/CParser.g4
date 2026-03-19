@@ -42,7 +42,7 @@ printf_statement
     ;
 
 printf_arg
-    : unary_expr
+    : expression
     ;
 
 // scanf("format", &var1, &var2, ...)
@@ -51,7 +51,7 @@ scanf_statement
     ;
 
 scanf_arg
-    : unary_expr
+    : expression
     ;
 
 // ── Variable declaration ──────────────────────────────────────

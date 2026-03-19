@@ -147,6 +147,8 @@ class ConstantFolder:
 
         if isinstance(node.left, FloatLiteralNode) and isinstance(node.right, FloatLiteralNode):
             result = self._eval_binary(node.op, node.left.value, node.right.value)
+            if node.op in ('&&', '||', '==', '!=', '<', '>', '<=', '>='):
+                return IntLiteralNode(int(result))
             return FloatLiteralNode(result)
 
         return node
