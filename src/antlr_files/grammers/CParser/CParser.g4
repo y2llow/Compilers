@@ -56,7 +56,7 @@ scanf_arg
 
 // ── Variable declaration ──────────────────────────────────────
 var_decl
-    : CONST? type_spec '*'* IDENTIFIER array_dimension* ('=' var_initializer)?
+    : CONST? type_spec CONST? '*'* IDENTIFIER array_dimension* ('=' var_initializer)?
     ;
 
 // Array dimensions: [10] or [3][4], etc.

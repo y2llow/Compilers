@@ -90,17 +90,22 @@ class SemanticAnalyzer:
 
     # ── Program structure ─────────────────────────────────────
 
-
     def visit_MainFunctionNode(self, node):
-        """Bezoek main functie - maak nieuwe scope"""
-        # Push scope voor main function
         self.symbol_table.push_scope()
+        seen_non_decl = False  # ← nieuw
 
-        # Visit alle statements
         for stmt in node.statements:
+            if isinstance(stmt, VarDeclNode):
+                if seen_non_decl:
+                    self.add_warning(
+                        getattr(stmt, 'line', 0),
+                        getattr(stmt, 'column', 0),
+                        f"Warning: ISO C90 forbids mixed declarations and code"
+                    )
+            else:
+                seen_non_decl = True  # ← zodra er een niet-declaratie voorbijkomt
             self.visit(stmt)
 
-        # Pop scope
         self.symbol_table.pop_scope()
 
     def visit_ReturnNode(self, node):
@@ -138,6 +143,10 @@ class SemanticAnalyzer:
             if isinstance(node.value, ArrayInitializerNode):
                 self._check_array_initializer(node, node.value)
             else:
+                # NIEUW: ook binary operations checken in initializer
+                if isinstance(node.value, BinaryOpNode):
+                    self.visit_BinaryOpNode(node.value)
+
                 value_type = self._get_expression_type(node.value)
 
                 # Check type compatibiliteit
@@ -210,18 +219,68 @@ class SemanticAnalyzer:
             )
 
     def visit_BinaryOpNode(self, node):
-        """Bezoek binaire operatie"""
+        """Bezoek binaire operatie als top-level statement"""
         left_type = self._get_expression_type(node.left)
         right_type = self._get_expression_type(node.right)
 
-        # Check of beide operanden dezelfde (compatibele) types hebben
         if left_type is not None and right_type is not None:
-            self._check_binary_operation(
-                op=node.op,
-                left_type=left_type,
-                right_type=right_type,
-                node=node
+            self._check_binary_operation(node.op, left_type, right_type, node)
+
+        self._check_expression(node.left)
+        self._check_expression(node.right)
+
+    def _check_binary_operation(self, op, left_type, right_type, node):
+        left_base, left_ptr = left_type[0], left_type[1]
+        right_base, right_ptr = right_type[0], right_type[1]
+
+        # Pointer vergelijkingen en operaties
+        if left_ptr > 0 or right_ptr > 0:
+            if op in ('==', '!=', '<', '>', '<=', '>='):
+                # pointer vs integer
+                if (left_ptr > 0 and right_ptr == 0) or (left_ptr == 0 and right_ptr > 0):
+                    self.add_warning(
+                        getattr(node, 'line', 0),
+                        getattr(node, 'column', 0),
+                        f"Warning: comparison between pointer and integer"
+                    )
+                # verschillende pointer types
+                elif left_ptr > 0 and right_ptr > 0 and left_base != right_base:
+                    self.add_warning(
+                        getattr(node, 'line', 0),
+                        getattr(node, 'column', 0),
+                        f"Warning: comparison of distinct pointer types lacks a cast"
+                    )
+            elif op in ('+', '-'):
+                # pointer + pointer of incompatibele pointer types: error
+                if left_ptr > 0 and right_ptr > 0:
+                    if left_base != right_base or left_ptr != right_ptr:
+                        self.add_error(
+                            getattr(node, 'line', 0),
+                            getattr(node, 'column', 0),
+                            f"Error: invalid operands to binary {op} (have '{left_base}{'*' * left_ptr}' and '{right_base}{'*' * right_ptr}')"
+                        )
+            return
+
+        if left_base == 'void' or right_base == 'void':
+            self.add_error(
+                getattr(node, 'line', 0),
+                getattr(node, 'column', 0),
+                f"Error: cannot use 'void' in binary operation '{op}'"
             )
+            return
+
+        if op in ('<<', '>>'):
+            right = node.right
+            is_negative = (
+                    (isinstance(right, UnaryOpNode) and right.op == '-') or
+                    (isinstance(right, IntLiteralNode) and right.value < 0)
+            )
+            if is_negative:
+                self.add_warning(
+                    getattr(node, 'line', 0),
+                    getattr(node, 'column', 0),
+                    f"Warning: right operand of '{op}' is negative (undefined behavior)"
+                )
 
     def visit_UnaryOpNode(self, node):
         """Bezoek unaire operatie"""
@@ -443,6 +502,14 @@ class SemanticAnalyzer:
         if target_base == 'char' and target_ptr == 0 and value_base == 'char' and value_ptr == 1:
             return
 
+        if value_ptr > 0 and target_ptr == 0:
+            self.add_error(
+                getattr(node, 'line', 0),
+                getattr(node, 'column', 0),
+                f"Error: incompatible types when initializing type '{target_base}' using type '{value_base}{'*' * value_ptr}'"
+            )
+            return
+
         # Pointer assignments
         if target_ptr > 0 or value_ptr > 0:
             self._check_pointer_assignment(
@@ -456,9 +523,13 @@ class SemanticAnalyzer:
         )
 
     def _check_pointer_assignment(self, target_type, value_type, target_name, node):
-        """Check pointer-to-pointer assignments"""
         target_base, target_ptr = target_type[0], target_type[1]
         value_base, value_ptr = value_type[0], value_type[1]
+
+        # 0 mag altijd toegewezen worden aan pointer (null pointer)
+        value_node = getattr(node, 'value', None)
+        if isinstance(value_node, IntLiteralNode) and value_node.value == 0:
+            return
 
         # void* kan naar alles
         if value_base == 'void':
@@ -466,19 +537,19 @@ class SemanticAnalyzer:
 
         # Moet exact hetzelfde aantal sterren hebben
         if target_ptr != value_ptr:
-            self.add_error(
+            self.add_warning(  # ← was add_error
                 getattr(node, 'line', 0),
                 getattr(node, 'column', 0),
-                f"Error: cannot assign pointer depth {value_ptr} to pointer depth {target_ptr}"
+                f"Warning: assignment to '{target_base}{'*' * target_ptr}' from incompatible pointer type '{value_base}{'*' * value_ptr}'"
             )
             return
 
         # Types moeten compatibel zijn
         if target_base != value_base and target_base != 'void':
-            self.add_error(
+            self.add_warning(  # ← was add_error
                 getattr(node, 'line', 0),
                 getattr(node, 'column', 0),
-                f"Error: cannot assign '{value_base}{'*' * value_ptr}' to '{target_base}{'*' * target_ptr}'"
+                f"Warning: assignment to '{target_base}{'*' * target_ptr}' from incompatible pointer type '{value_base}{'*' * value_ptr}'"
             )
 
     def _check_scalar_assignment(self, target_type, value_type, target_name, node):
@@ -508,25 +579,6 @@ class SemanticAnalyzer:
                 f"Error: cannot assign '{value_type}' to '{target_type}'"
             )
 
-    def _check_binary_operation(self, op, left_type, right_type, node):
-        """Check binary operatie type compatibiliteit"""
-        left_base, left_ptr = left_type[0], left_type[1]
-        right_base, right_ptr = right_type[0], right_type[1]
-
-        # Pointers kunnen niet gearithmetiseerd worden (behalve somige operaties)
-        if left_ptr > 0 or right_ptr > 0:
-            # Pointer arithmetic is complex, skip voor nu
-            return
-
-        # Beide operanden moeten scalaire types zijn
-        if left_base == 'void' or right_base == 'void':
-            self.add_error(
-                getattr(node, 'line', 0),
-                getattr(node, 'column', 0),
-                f"Error: cannot use 'void' in binary operation '{op}'"
-            )
-            return
-
     # ── Expression checking ───────────────────────────────────
 
     def _check_expression(self, node):
@@ -542,6 +594,10 @@ class SemanticAnalyzer:
         elif isinstance(node, BinaryOpNode):
             self._check_expression(node.left)
             self._check_expression(node.right)
+            left_type = self._get_expression_type(node.left)
+            right_type = self._get_expression_type(node.right)
+            if left_type is not None and right_type is not None:
+                self._check_binary_operation(node.op, left_type, right_type, node)
         elif isinstance(node, UnaryOpNode):
             self._check_expression(node.operand)
         elif isinstance(node, DereferenceNode):
@@ -558,9 +614,9 @@ class SemanticAnalyzer:
         elif isinstance(node, AddressOfNode):
             self._check_expression(node.operand)
         elif isinstance(node, IncrementNode):
-            self._check_expression(node.operand)
+            self._check_lvalue(node.operand)
         elif isinstance(node, DecrementNode):
-            self._check_expression(node.operand)
+            self._check_lvalue(node.operand)
         elif isinstance(node, CastNode):
             self._check_expression(node.operand)
         elif isinstance(node, ArrayAccessNode):
@@ -625,6 +681,15 @@ class SemanticAnalyzer:
         elif isinstance(node, DereferenceNode):
             # Dereference kann lvalue sein, aber we moeten the operand checken
             self._check_expression(node.operand)
+            if isinstance(node.operand, IdentifierNode):
+                symbol = self.symbol_table.lookup(node.operand.name)
+                if symbol is not None and symbol.is_const and symbol.pointer_depth > 0:
+                    self.add_error(
+                        getattr(node, 'line', 0),
+                        getattr(node, 'column', 0),
+                        f"Error: assignment of read-only location '*{node.operand.name}'"
+                    )
+
 
         elif isinstance(node, (IntLiteralNode, FloatLiteralNode, CharLiteralNode)):
             # Kan niet toewijzen aan literal
@@ -724,10 +789,16 @@ class SemanticAnalyzer:
     # ── include methods ────────────────────────────────────────
 
     def visit_ProgramNode(self, node):
-        # Check includes first
         for inc in node.includes:
             self.visit(inc)
-        # Then analyse main
+
+        if not getattr(node, 'has_real_main', True):
+            self.add_error(
+                0, 0,
+                "Error: missing 'int main()' function"
+            )
+            return
+
         self.visit(node.main_function)
 
     def visit_IncludeNode(self, node):

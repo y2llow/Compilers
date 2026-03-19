@@ -1,30 +1,18 @@
 from antlr4.error.ErrorListener import ErrorListener
+import antlr4
 
-# ANSI color codes
 RED = '\033[91m'
 RESET = '\033[0m'
 
 
 class SyntaxErrorListener(ErrorListener):
-    """
-    Custom error listener for ANTLR syntax errors.
-    Shows line, column, source line and ^ indicator.
-    """
 
     def __init__(self, source_lines):
-        """
-        Args:
-            source_lines: List of source code lines (from file.readlines())
-        """
         super().__init__()
         self.source_lines = source_lines
         self.errors = []
 
     def _get_previous_code_line(self, line_num):
-        """
-        Get the previous non-comment, non-empty line before line_num.
-        Returns (line_number, line_content, column_at_end) or None if not found.
-        """
         for i in range(line_num - 2, -1, -1):
             line = self.source_lines[i].strip()
             if line and not line.startswith('//'):
@@ -35,35 +23,18 @@ class SyntaxErrorListener(ErrorListener):
         return None
 
     def syntaxError(self, recognizer, offendingSymbol, line, column, msg, e):
-        """
-        Called by ANTLR when a syntax error is encountered.
-
-        Args:
-            recognizer: The parser or lexer
-            offendingSymbol: The token that caused the error
-            line: Line number (1-indexed)
-            column: Column position (0-indexed)
-            msg: Error message from ANTLR
-            e: Exception (if any)
-        """
         self.errors.append({
             'line': line,
             'column': column,
             'message': msg,
             'symbol': offendingSymbol
         })
+        raise antlr4.error.Errors.ParseCancellationException("syntax error")
 
     def has_errors(self):
-        """Check if any syntax errors were found."""
         return len(self.errors) > 0
 
     def format_errors(self):
-        """
-        Format all collected errors showing line, column, source line and ^ indicator.
-
-        Returns:
-            String with formatted error lines and count
-        """
         output = []
 
         sorted_errors = sorted(self.errors, key=lambda e: e['line'])
@@ -87,13 +58,11 @@ class SyntaxErrorListener(ErrorListener):
                     actual_line, source_line, pointer_column = result
                 else:
                     actual_line = line_num
-                    source_line = self.source_lines[line_num - 1].rstrip('\n') if 0 < line_num <= len(
-                        self.source_lines) else ""
+                    source_line = self.source_lines[line_num - 1].rstrip('\n') if 0 < line_num <= len(self.source_lines) else ""
                     pointer_column = column
             else:
                 actual_line = line_num
-                source_line = self.source_lines[line_num - 1].rstrip('\n') if 0 < line_num <= len(
-                    self.source_lines) else ""
+                source_line = self.source_lines[line_num - 1].rstrip('\n') if 0 < line_num <= len(self.source_lines) else ""
                 pointer_column = column
 
             output.append(f"{RED}[Syntax Error] line {actual_line}, column {pointer_column}{RESET}")
@@ -102,8 +71,7 @@ class SyntaxErrorListener(ErrorListener):
                 line_num_str = str(actual_line)
                 padding = ' ' * len(line_num_str)
                 output.append(f"{RED}   {line_num_str} | {source_line}{RESET}")
-                pointer_line = RED + '   ' + padding + ' | ' + ' ' * pointer_column + '^' + RESET
-                output.append(pointer_line)
+                output.append(RED + '   ' + padding + ' | ' + ' ' * pointer_column + '^' + RESET)
 
             output.append('')
 

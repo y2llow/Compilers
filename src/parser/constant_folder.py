@@ -129,15 +129,25 @@ class ConstantFolder:
         if isinstance(node.operand, IntLiteralNode):
             return IntLiteralNode(self._eval_unary(node.op, node.operand.value))
 
+        elif isinstance(node.operand, FloatLiteralNode):
+            if node.op == '-':
+                return FloatLiteralNode(-node.operand.value)
+            elif node.op == '+':
+                return FloatLiteralNode(node.operand.value)
+
         return node
 
     def visit_BinaryOpNode(self, node: BinaryOpNode) -> ASTNode:
-        node.left  = self.visit(node.left)
+        node.left = self.visit(node.left)
         node.right = self.visit(node.right)
 
         if isinstance(node.left, IntLiteralNode) and isinstance(node.right, IntLiteralNode):
             result = self._eval_binary(node.op, node.left.value, node.right.value)
             return IntLiteralNode(result)
+
+        if isinstance(node.left, FloatLiteralNode) and isinstance(node.right, FloatLiteralNode):
+            result = self._eval_binary(node.op, node.left.value, node.right.value)
+            return FloatLiteralNode(result)
 
         return node
 
@@ -194,10 +204,13 @@ class ConstantFolder:
             case '|':  return left |  right
             case '^':  return left ^  right
             case '<<':
-                return left << right if right >= 0 else left >> (-right)
+                if right < 0:
+                    return left  # niet folden bij negatieve shift
+                return left << right
             case '>>':
-                return left >> right if right >= 0 else left << (-right)
-            case _:    raise ValueError(f"Unknown binary operator: {op}")
+                if right < 0:
+                    return left  # niet folden bij negatieve shift
+                return left >> right
 
     # ── Evaluation helpers ────────────────────────────────────
 

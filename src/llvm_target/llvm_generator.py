@@ -280,25 +280,19 @@ class LLVMGenerator:
     def visit_VarDeclNode(self, node: VarDeclNode):
         self._collect_comments(node)
 
-        # Array declaratie
         if node.array_dimensions:
-            # Bouw het array type op van binnen naar buiten
-            # bijv. int arr[2][3] → [2 x [3 x i32]]
             base_type = self._get_llvm_type(node.type_name, node.pointer_depth)
             array_type = base_type
             for dim in reversed(node.array_dimensions):
                 array_type = ir.ArrayType(array_type, dim)
 
-            # Alloceer het array
             var_ptr = self.builder.alloca(array_type, name=node.name)
             self.variables[node.name] = var_ptr
 
-            # Initialisatie indien aanwezig
             if node.value is not None:
                 self._init_array(var_ptr, array_type, node.value, node.array_dimensions)
 
         else:
-            # Gewone variabele (zoals voorheen)
             llvm_type = self._get_llvm_type(node.type_name, node.pointer_depth)
             var_ptr = self.builder.alloca(llvm_type, name=node.name)
             self.variables[node.name] = var_ptr
@@ -306,16 +300,21 @@ class LLVMGenerator:
             if node.value is not None:
                 value = self.visit(node.value)
 
-                # Automatische type conversie
-                if isinstance(llvm_type, ir.FloatType) and isinstance(value.type, ir.IntType):
+                if isinstance(llvm_type, ir.PointerType) and isinstance(value.type, ir.IntType):
+                    value = ir.Constant(llvm_type, None)
+                elif isinstance(llvm_type, ir.FloatType) and isinstance(value.type, ir.IntType):
                     value = self.builder.sitofp(value, ir.FloatType())
                 elif isinstance(llvm_type, ir.IntType) and isinstance(value.type, ir.FloatType):
                     value = self.builder.fptosi(value, ir.IntType(32))
                 elif isinstance(llvm_type, ir.IntType) and isinstance(value.type, ir.IntType):
                     if llvm_type.width != value.type.width:
-                        value = self.builder.sext(value,
-                                                  llvm_type) if llvm_type.width > value.type.width else self.builder.trunc(
-                            value, llvm_type)
+                        if llvm_type.width > value.type.width:
+                            value = self.builder.sext(value, llvm_type)
+                        else:
+                            value = self.builder.trunc(value, llvm_type)
+                elif value.type != llvm_type:
+                    # Incompatibele pointer types: bitcast (zoals GCC)
+                    value = self.builder.bitcast(value, llvm_type)
 
                 self.builder.store(value, var_ptr)
 
@@ -388,9 +387,11 @@ class LLVMGenerator:
                 value = self.builder.sitofp(value, ir.FloatType())
             elif isinstance(target_llvm_type, ir.IntType) and isinstance(value.type, ir.FloatType):
                 value = self.builder.fptosi(value, ir.IntType(32))
+            elif value.type != target_llvm_type:
+                # Incompatibele pointer types: bitcast om door te gaan (zoals GCC)
+                value = self.builder.bitcast(value, target_llvm_type)
 
             self.builder.store(value, var_ptr)
-
 
         elif isinstance(node.target, DereferenceNode):
             # Pointer assignment: *ptr = 10
@@ -475,19 +476,30 @@ class LLVMGenerator:
         return self.builder.load(var_ptr, name=node.name)
 
     def visit_BinaryOpNode(self, node: BinaryOpNode):
-        """
-        Genereer een binaire operatie.
-
-        Integer arithmetic:  add, sub, mul, sdiv, srem
-        Float arithmetic:    fadd, fsub, fmul, fdiv
-        Comparison (int):    icmp → zext naar i32
-        Comparison (float):  fcmp → zext naar i32
-        Logical:             and, or (na bool-conversie)
-        Bitwise:             and, or, xor
-        Shift:               shl, ashr
-        """
         left = self.visit(node.left)
         right = self.visit(node.right)
+
+        # Pointer arithmetic
+        if isinstance(left.type, ir.PointerType) and node.op == '+':
+            return self.builder.gep(left, [right], inbounds=True)
+        if isinstance(left.type, ir.PointerType) and node.op == '-':
+            neg = self.builder.neg(right)
+            return self.builder.gep(left, [neg], inbounds=True)
+
+        # Pointer vergelijkingen
+        if isinstance(left.type, ir.PointerType) or isinstance(right.type, ir.PointerType):
+            if node.op in ('==', '!=', '<', '>', '<=', '>='):
+                if isinstance(left.type, ir.IntType):
+                    left = self.builder.inttoptr(left, right.type)
+                if isinstance(right.type, ir.IntType):
+                    right = self.builder.inttoptr(right, left.type)
+                cmp_map = {
+                    '==': '==', '!=': '!=',
+                    '<': '<', '>': '>',
+                    '<=': '<=', '>=': '>=',
+                }
+                cmp_result = self.builder.icmp_unsigned(cmp_map[node.op], left, right)
+                return self.builder.zext(cmp_result, ir.IntType(32))
 
         # Bepaal of we met floats werken
         is_float = isinstance(left.type, ir.FloatType) or isinstance(right.type, ir.FloatType)
@@ -509,11 +521,9 @@ class LLVMGenerator:
         elif node.op == '/':
             return self.builder.fdiv(left, right) if is_float else self.builder.sdiv(left, right)
         elif node.op == '%':
-            # % niet geldig voor floats in C
             return self.builder.srem(left, right)
 
         # ── Comparison ──────────────────────────────────────────
-        # icmp/fcmp geeft i1 terug → zext naar i32 voor C-compatibiliteit
         elif node.op in ('==', '!=', '<', '>', '<=', '>='):
             if is_float:
                 cmp_map = {
@@ -529,11 +539,9 @@ class LLVMGenerator:
                     '<=': '<=', '>=': '>=',
                 }
                 cmp_result = self.builder.icmp_signed(cmp_map[node.op], left, right)
-            # i1 → i32
             return self.builder.zext(cmp_result, ir.IntType(32))
 
         # ── Logical ─────────────────────────────────────────────
-        # && en || werken op bools: zet operanden eerst naar i1
         elif node.op == '&&':
             left_bool = self.builder.icmp_signed('!=', left, ir.Constant(ir.IntType(32), 0))
             right_bool = self.builder.icmp_signed('!=', right, ir.Constant(ir.IntType(32), 0))
@@ -557,7 +565,7 @@ class LLVMGenerator:
         elif node.op == '<<':
             return self.builder.shl(left, right)
         elif node.op == '>>':
-            return self.builder.ashr(left, right)  # arithmetic shift right (signed)
+            return self.builder.ashr(left, right)
 
         else:
             raise NotImplementedError(f"Operator {node.op} nog niet ondersteund")
@@ -631,53 +639,33 @@ class LLVMGenerator:
         return base_type
 
     def visit_IncrementNode(self, node: IncrementNode):
-        """
-        x++ of ++x
-
-        C code:
-            x++   → geeft oude waarde terug, slaat nieuwe op
-            ++x   → geeft nieuwe waarde terug, slaat nieuwe op
-        """
-        # Haal de pointer op naar de variabele
         var_ptr = self.variables[node.operand.name]
+        old_value = self.builder.load(var_ptr, name=node.operand.name)
 
-        # Laad de huidige waarde
-        old_value = self.builder.load(var_ptr)
+        # Check of het een pointer is
+        if isinstance(old_value.type, ir.PointerType):
+            one = ir.Constant(ir.IntType(32), 1)
+            new_value = self.builder.gep(old_value, [one], inbounds=True)
+        else:
+            one = ir.Constant(ir.IntType(32), 1)
+            new_value = self.builder.add(old_value, one)
 
-        # Tel 1 op
-        one = ir.Constant(ir.IntType(32), 1)
-        new_value = self.builder.add(old_value, one)
-
-        # Sla nieuwe waarde op
         self.builder.store(new_value, var_ptr)
-
-        # Prefix (++x) → geef nieuwe waarde terug
-        # Postfix (x++) → geef oude waarde terug
         return new_value if node.prefix else old_value
 
     def visit_DecrementNode(self, node: DecrementNode):
-        """
-        x-- of --x
-
-        C code:
-            x--   → geeft oude waarde terug, slaat nieuwe op
-            --x   → geeft nieuwe waarde terug, slaat nieuwe op
-        """
-        # Haal de pointer op naar de variabele
         var_ptr = self.variables[node.operand.name]
+        old_value = self.builder.load(var_ptr, name=node.operand.name)
 
-        # Laad de huidige waarde
-        old_value = self.builder.load(var_ptr)
+        # Check of het een pointer is
+        if isinstance(old_value.type, ir.PointerType):
+            minus_one = ir.Constant(ir.IntType(32), -1)
+            new_value = self.builder.gep(old_value, [minus_one], inbounds=True)
+        else:
+            one = ir.Constant(ir.IntType(32), 1)
+            new_value = self.builder.sub(old_value, one)
 
-        # Trek 1 af
-        one = ir.Constant(ir.IntType(32), 1)
-        new_value = self.builder.sub(old_value, one)
-
-        # Sla nieuwe waarde op
         self.builder.store(new_value, var_ptr)
-
-        # Prefix (--x) → geef nieuwe waarde terug
-        # Postfix (x--) → geef oude waarde terug
         return new_value if node.prefix else old_value
 
     def visit_AddressOfNode(self, node: AddressOfNode):

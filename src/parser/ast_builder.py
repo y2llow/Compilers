@@ -97,43 +97,38 @@ class ASTBuilder(CParserVisitor):
 
     # ── Top level ─────────────────────────────────────────────
     def visitTranslation_unit(self, ctx):
-        """
-        Parse top-level: include_directive* (main_function | statement)* EOF
-        """
         includes = []
         main_fn = None
         statements = []
+        has_real_main = False  # NIEUW
 
-        # Visit all children
         for i in range(ctx.getChildCount()):
             child = ctx.getChild(i)
 
-            # Skip EOF
             if hasattr(child, 'getText') and child.getText() == '<EOF>':
                 continue
 
             child_type = type(child).__name__
 
-            # If it's an include_directive, collect it
             if 'Include_directiveContext' in child_type:
                 inc = self.visit(child)
                 if inc is not None:
                     includes.append(inc)
-            # If it's a main_function, save it
             elif 'Main_functionContext' in child_type:
                 main_fn = self.visit(child)
-            # Otherwise it's a statement
+                has_real_main = True  # NIEUW
             else:
                 result = self.visit(child)
                 if result is not None:
                     statements.append(result)
 
-        # If we have a main function, use it
-        if main_fn:
+        if has_real_main:
             program = ProgramNode(includes, main_fn)
         else:
-            # Otherwise wrap statements in a main function
-            program = ProgramNode(includes, MainFunctionNode(statements))
+            # Geen echte main — zet has_real_main=False op het program node
+            fake_main = MainFunctionNode(statements)
+            program = ProgramNode(includes, fake_main)
+            program.has_real_main = False  # NIEUW: markeer als fake
 
         return self._attach_position(program, ctx)
 
