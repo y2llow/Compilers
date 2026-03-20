@@ -116,7 +116,7 @@ class ASTBuilder(CParserVisitor):
                     includes.append(inc)
             elif 'Main_functionContext' in child_type:
                 main_fn = self.visit(child)
-                has_real_main = True  # NIEUW
+                has_real_main = True
             else:
                 result = self.visit(child)
                 if result is not None:
@@ -128,7 +128,7 @@ class ASTBuilder(CParserVisitor):
             # Geen echte main — zet has_real_main=False op het program node
             fake_main = MainFunctionNode(statements)
             program = ProgramNode(includes, fake_main)
-            program.has_real_main = False  # NIEUW: markeer als fake
+            program.has_real_main = False
 
         return self._attach_position(program, ctx)
 

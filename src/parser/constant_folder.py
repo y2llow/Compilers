@@ -78,7 +78,6 @@ class ConstantFolder:
         if node.value is not None:
             node.value = self.visit(node.value)
 
-            # NIEUW: pas het resultaat aan naar het doeltype
             if node.type_name == 'int' and node.pointer_depth == 0:
                 if isinstance(node.value, FloatLiteralNode):
                     node.value = IntLiteralNode(int(node.value.value))

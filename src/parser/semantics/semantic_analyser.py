@@ -126,7 +126,7 @@ class SemanticAnalyzer:
             node.is_const,
             line=getattr(node, 'line', 0),
             column=getattr(node, 'column', 0),
-            array_dimensions=node.array_dimensions  # NEW: pass array dims
+            array_dimensions=node.array_dimensions
         )
 
         if not success:
@@ -143,7 +143,6 @@ class SemanticAnalyzer:
             if isinstance(node.value, ArrayInitializerNode):
                 self._check_array_initializer(node, node.value)
             else:
-                # NIEUW: ook binary operations checken in initializer
                 if isinstance(node.value, BinaryOpNode):
                     self.visit_BinaryOpNode(node.value)
 

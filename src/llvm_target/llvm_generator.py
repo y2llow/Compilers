@@ -4,7 +4,6 @@ LLVM IR Code Generator - WITH COMMENT SUPPORT
 
 Vertaalt AST naar LLVM IR code.
 
-NIEUW: Comments from source code are now embedded in LLVM output
 """
 
 from llvmlite import ir
@@ -55,15 +54,14 @@ class LLVMGenerator:
         # Symbol table: variabele naam -> LLVM waarde
         self.variables = {}
 
-        # NIEUW: Comment tracking
         # Maps: line_number -> {'source': str, 'leading': list, 'inline': str}
         self.line_to_comment = {}
         self.comment_order = []  # Track order of statements
 
-        self.string_counter = 0  # ← NIEUW: teller voor unieke string namen
+        self.string_counter = 0
 
-        self.printf_func = None  # ← NIEUW
-        self.scanf_func = None  # ← NIEUW (alvast voor scanf)
+        self.printf_func = None
+        self.scanf_func = None
 
     # ═══════════════════════════════════════════════════════════
     # PUBLIC API
@@ -82,13 +80,12 @@ class LLVMGenerator:
         # Return de gegenereerde LLVM IR als string
         raw_llvm = str(self.module)
 
-        # NIEUW: Add comments to LLVM output
         llvm_with_comments = self._add_comments_to_llvm(raw_llvm)
 
         return llvm_with_comments
 
     # ═══════════════════════════════════════════════════════════
-    # NIEUW: COMMENT HANDLING
+    # COMMENT HANDLING
     # ═══════════════════════════════════════════════════════════
 
     def _collect_comments(self, node):
@@ -210,7 +207,7 @@ class LLVMGenerator:
 
     def visit_ProgramNode(self, node: ProgramNode):
         """Bezoek het programma (bevat main function)."""
-        # AANGEPAST: collect comments from includes (but don't process them)
+        # collect comments from includes (but don't process them)
         for inc in node.includes:
             self._collect_comments(inc)
 
@@ -229,7 +226,6 @@ class LLVMGenerator:
               ...
             }
         """
-        # NIEUW: Collect comments
         self._collect_comments(node)
 
         # Definieer de main functie: int main()
@@ -514,7 +510,6 @@ class LLVMGenerator:
                 cmp_result = self.builder.icmp_unsigned(cmp_map[node.op], left, right)
                 return self.builder.zext(cmp_result, ir.IntType(32))
 
-        # NIEUW: char (i8) promoveren naar i32
         if isinstance(left.type, ir.IntType) and left.type.width < 32:
             left = self.builder.sext(left, ir.IntType(32))
         if isinstance(right.type, ir.IntType) and right.type.width < 32:
