@@ -1,4 +1,6 @@
 import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 import argparse
 import antlr4
 
@@ -14,16 +16,26 @@ from parser.comment_collector import CommentCollector
 
 def main():
     arg_parser = argparse.ArgumentParser()
-    arg_parser.add_argument("source_file")
-    arg_parser.add_argument("--no-fold", action="store_true")
-    arg_parser.add_argument("--dot", metavar="OUTPUT.dot")
-    arg_parser.add_argument("--target_llvm", metavar="OUTPUT.ll")
+    arg_parser.add_argument("--input", required=True, metavar="INPUT.c",
+                            help="Path to the C source file")
+    arg_parser.add_argument("--no-fold", action="store_true",
+                            help="Disable constant folding")
+    arg_parser.add_argument("--render_ast", metavar="OUTPUT.dot",
+                            help="Render AST to a Graphviz dot file")
+    arg_parser.add_argument("--render_symb", metavar="OUTPUT.dot",
+                            help="Render symbol table to a Graphviz dot file")
+    arg_parser.add_argument("--target_llvm", metavar="OUTPUT.ll",
+                            help="Compile to LLVM IR")
+    arg_parser.add_argument("--target_mips", metavar="OUTPUT.mips",
+                            help="Compile to MIPS assembly")
+    arg_parser.add_argument("--target_bin", metavar="OUTPUT",
+                            help="Compile to native binary")
     args = arg_parser.parse_args()
 
-    with open(args.source_file, 'r') as f:
+    with open(args.input, 'r') as f:
         source_lines = f.readlines()
 
-    input_stream = antlr4.FileStream(args.source_file)
+    input_stream = antlr4.FileStream(args.input)
 
     lexer = CParserLexer(input_stream)
     token_stream = antlr4.CommonTokenStream(lexer)
@@ -36,7 +48,7 @@ def main():
     parser.removeErrorListeners()
     parser.addErrorListener(error_listener)
 
-    comment_input = antlr4.FileStream(args.source_file)
+    comment_input = antlr4.FileStream(args.input)
     comment_lexer = CParserLexer(comment_input)
     comment_lexer.removeErrorListeners()
     comment_token_stream = antlr4.CommonTokenStream(comment_lexer)
@@ -98,13 +110,38 @@ def main():
         print(f"           echo $?")
         print()
 
-    if args.dot:
+    if args.render_ast:
         dot_string = DotVisitor().visit(ast)
-        with open(args.dot, "w") as f:
+        with open(args.render_ast, "w") as f:
             f.write(dot_string)
-        print(f"Dot file written to: {args.dot}")
-        print(f"Visualise with:      xdot {args.dot}")
-        print(f"Export PNG with:     dot -Tpng {args.dot} -o ast.png")
+        print(f"AST dot file written to: {args.render_ast}")
+        print(f"Visualise with:          xdot {args.render_ast}")
+        print(f"Export PNG with:         dot -Tpng {args.render_ast} -o ast.png")
+
+    if args.render_symb:
+        # Symbol table rendering — basic dot output of the symbol table
+        dot_lines = ['digraph SymbolTable {', '    node [fontname="Helvetica"];']
+        for i, scope in enumerate(analyzer.symbol_table.scopes):
+            scope_id = f"scope{i}"
+            dot_lines.append(f'    {scope_id} [label="Scope {i}", shape=rectangle];')
+            for name, sym in scope.items():
+                sym_id = f"sym_{i}_{name}"
+                const = "const " if sym.is_const else ""
+                stars = '*' * sym.pointer_depth
+                dims = ''.join([f'[{d}]' for d in sym.array_dimensions])
+                label = f"{const}{sym.type_name}{stars} {sym.name}{dims}"
+                dot_lines.append(f'    {sym_id} [label="{label}", shape=ellipse];')
+                dot_lines.append(f'    {scope_id} -> {sym_id};')
+        dot_lines.append('}')
+        with open(args.render_symb, "w") as f:
+            f.write('\n'.join(dot_lines))
+        print(f"Symbol table dot file written to: {args.render_symb}")
+
+    if args.target_mips:
+        print(f"⚠️  MIPS target not yet implemented.")
+
+    if args.target_bin:
+        print(f"⚠️  Binary target not yet implemented.")
 
 
 if __name__ == '__main__':
