@@ -75,18 +75,30 @@ class ConstantFolder:
     # ── Statements ────────────────────────────────────────────
 
     def visit_VarDeclNode(self, node: VarDeclNode) -> VarDeclNode:
-        # First fold the initializer expression
         if node.value is not None:
             node.value = self.visit(node.value)
+
+            # NIEUW: pas het resultaat aan naar het doeltype
+            if node.type_name == 'int' and node.pointer_depth == 0:
+                if isinstance(node.value, FloatLiteralNode):
+                    node.value = IntLiteralNode(int(node.value.value))
+                elif isinstance(node.value, CharLiteralNode):
+                    node.value = IntLiteralNode(ord(node.value.value[0]))
+            elif node.type_name == 'char' and node.pointer_depth == 0:
+                if isinstance(node.value, FloatLiteralNode):
+                    node.value = IntLiteralNode(int(node.value.value))
+                elif isinstance(node.value, IntLiteralNode):
+                    pass  # blijft IntLiteralNode
+            elif node.type_name == 'float' and node.pointer_depth == 0:
+                if isinstance(node.value, IntLiteralNode):
+                    node.value = FloatLiteralNode(float(node.value.value))
 
             # If the result is a literal, remember it for propagation
             if isinstance(node.value, (IntLiteralNode, FloatLiteralNode, CharLiteralNode)):
                 self._known[node.name] = node.value
             else:
-                # Value is not fully known (e.g. depends on another variable)
                 self._known.pop(node.name, None)
         else:
-            # No initializer — value is unknown
             self._known.pop(node.name, None)
 
         return node
@@ -104,6 +116,11 @@ class ConstantFolder:
             else:
                 # Value is no longer known (e.g. x = x + y)
                 self._known.pop(name, None)
+
+        elif isinstance(node.target, DereferenceNode):
+            # NIEUW: *ptr = value — we weten niet welke variabele verandert
+            # Gooi ALLE bekende waarden weg die via een pointer bereikbaar zijn
+            self._known.clear()
 
         return node
 
@@ -141,15 +158,38 @@ class ConstantFolder:
         node.left = self.visit(node.left)
         node.right = self.visit(node.right)
 
-        if isinstance(node.left, IntLiteralNode) and isinstance(node.right, IntLiteralNode):
-            result = self._eval_binary(node.op, node.left.value, node.right.value)
-            return IntLiteralNode(result)
+        escape_map = {
+            '\\n': 10, '\\t': 9, '\\r': 13,
+            '\\0': 0, '\\\\': 92, "\\'": 39, '\\"': 34,
+        }
 
-        if isinstance(node.left, FloatLiteralNode) and isinstance(node.right, FloatLiteralNode):
-            result = self._eval_binary(node.op, node.left.value, node.right.value)
+        def get_value(n):
+            if isinstance(n, IntLiteralNode):
+                return n.value, 'int'
+            if isinstance(n, FloatLiteralNode):
+                return n.value, 'float'
+            if isinstance(n, CharLiteralNode):
+                v = n.value
+                char_val = escape_map.get(v, ord(v[0]) if v else 0)
+                return char_val, 'char'
+            return None, None
+
+        left_val, left_type = get_value(node.left)
+        right_val, right_type = get_value(node.right)
+
+        if left_val is not None and right_val is not None:
+            # Niet folden bij deling door nul
+            if node.op in ('/', '%') and right_val == 0:
+                return node
+            # Niet folden bij bitwise/shift op floats
+            if node.op in ('<<', '>>', '&', '|', '^') and (left_type == 'float' or right_type == 'float'):
+                return node
+            result = self._eval_binary(node.op, left_val, right_val)
             if node.op in ('&&', '||', '==', '!=', '<', '>', '<=', '>='):
                 return IntLiteralNode(int(result))
-            return FloatLiteralNode(result)
+            if left_type == 'float' or right_type == 'float':
+                return FloatLiteralNode(float(result))
+            return IntLiteralNode(int(result))
 
         return node
 

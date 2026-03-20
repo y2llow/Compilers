@@ -251,14 +251,12 @@ class SemanticAnalyzer:
                         f"Warning: comparison of distinct pointer types lacks a cast"
                     )
             elif op in ('+', '-'):
-                # pointer + pointer of incompatibele pointer types: error
                 if left_ptr > 0 and right_ptr > 0:
-                    if left_base != right_base or left_ptr != right_ptr:
-                        self.add_error(
-                            getattr(node, 'line', 0),
-                            getattr(node, 'column', 0),
-                            f"Error: invalid operands to binary {op} (have '{left_base}{'*' * left_ptr}' and '{right_base}{'*' * right_ptr}')"
-                        )
+                    self.add_error(
+                        getattr(node, 'line', 0),
+                        getattr(node, 'column', 0),
+                        f"Error: invalid operands to binary {op} (have '{left_base}{'*' * left_ptr}' and '{right_base}{'*' * right_ptr}')"
+                    )
             return
 
         if left_base == 'void' or right_base == 'void':
@@ -281,7 +279,6 @@ class SemanticAnalyzer:
                     getattr(node, 'column', 0),
                     f"Warning: right operand of '{op}' is negative (undefined behavior)"
                 )
-
     def visit_UnaryOpNode(self, node):
         """Bezoek unaire operatie"""
         self._check_expression(node.operand)
@@ -300,8 +297,14 @@ class SemanticAnalyzer:
 
     def visit_AddressOfNode(self, node):
         """Bezoek address-of operatie"""
+        if isinstance(node.operand, (IntLiteralNode, FloatLiteralNode, CharLiteralNode)):
+            self.add_error(
+                getattr(node, 'line', 0),
+                getattr(node, 'column', 0),
+                f"Error: lvalue required as unary '&' operand"
+            )
+            return
         self._check_expression(node.operand)
-
     def visit_IncrementNode(self, node):
         """Bezoek increment operatie"""
         self._check_lvalue(node.operand)
@@ -612,6 +615,13 @@ class SemanticAnalyzer:
                         f"Error: cannot dereference non-pointer type '{base_type}'"
                     )
         elif isinstance(node, AddressOfNode):
+            if isinstance(node.operand, (IntLiteralNode, FloatLiteralNode, CharLiteralNode)):
+                self.add_error(
+                    getattr(node, 'line', 0),
+                    getattr(node, 'column', 0),
+                    f"Error: lvalue required as unary '&' operand"
+                )
+                return
             self._check_expression(node.operand)
         elif isinstance(node, IncrementNode):
             self._check_lvalue(node.operand)

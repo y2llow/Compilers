@@ -168,7 +168,12 @@ class ASTBuilder(CParserVisitor):
 
     def visitVar_decl(self, ctx):
         # CONST? type_spec '*'* IDENTIFIER array_dimension* ('=' var_initializer)?
-        is_const = ctx.CONST() is not None
+        is_const = False
+        for i in range(ctx.getChildCount()):
+            child = ctx.getChild(i)
+            if hasattr(child, 'getText') and child.getText() == 'const':
+                is_const = True
+                break
         type_name = ctx.type_spec().getText()
 
         # Count the number of '*' tokens for pointer depth

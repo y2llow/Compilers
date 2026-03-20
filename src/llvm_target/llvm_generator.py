@@ -473,6 +473,10 @@ class LLVMGenerator:
             %1 = load i32, i32* %x
         """
         var_ptr = self.variables[node.name]
+        # Als het een array is, geef pointer naar eerste element (geen load)
+        if isinstance(var_ptr.type.pointee, ir.ArrayType):
+            zero = ir.Constant(ir.IntType(32), 0)
+            return self.builder.gep(var_ptr, [zero, zero], inbounds=True)
         return self.builder.load(var_ptr, name=node.name)
 
     def visit_BinaryOpNode(self, node: BinaryOpNode):
@@ -485,6 +489,9 @@ class LLVMGenerator:
         if isinstance(left.type, ir.PointerType) and node.op == '-':
             neg = self.builder.neg(right)
             return self.builder.gep(left, [neg], inbounds=True)
+
+        if isinstance(right.type, ir.PointerType) and node.op == '+':
+            return self.builder.gep(right, [left], inbounds=True)
 
         # Pointer vergelijkingen
         if isinstance(left.type, ir.PointerType) or isinstance(right.type, ir.PointerType):
@@ -500,6 +507,12 @@ class LLVMGenerator:
                 }
                 cmp_result = self.builder.icmp_unsigned(cmp_map[node.op], left, right)
                 return self.builder.zext(cmp_result, ir.IntType(32))
+
+        # NIEUW: char (i8) promoveren naar i32
+        if isinstance(left.type, ir.IntType) and left.type.width < 32:
+            left = self.builder.sext(left, ir.IntType(32))
+        if isinstance(right.type, ir.IntType) and right.type.width < 32:
+            right = self.builder.sext(right, ir.IntType(32))
 
         # Bepaal of we met floats werken
         is_float = isinstance(left.type, ir.FloatType) or isinstance(right.type, ir.FloatType)
@@ -639,8 +652,23 @@ class LLVMGenerator:
         return base_type
 
     def visit_IncrementNode(self, node: IncrementNode):
-        var_ptr = self.variables[node.operand.name]
-        old_value = self.builder.load(var_ptr, name=node.operand.name)
+        if isinstance(node.operand, IdentifierNode):
+            var_ptr = self.variables[node.operand.name]
+            old_value = self.builder.load(var_ptr, name=node.operand.name)
+        elif isinstance(node.operand, DereferenceNode):
+            # (*ptr)++ — laad de pointer, gebruik die als var_ptr
+            ptr = self.variables[node.operand.operand.name]
+            var_ptr = self.builder.load(ptr)
+            old_value = self.builder.load(var_ptr)
+        elif isinstance(node.operand, ArrayAccessNode):
+            # a[i]++ — bereken de pointer naar het element
+            zero = ir.Constant(ir.IntType(32), 0)
+            arr_ptr = self.variables[node.operand.array.name]
+            index = self.visit(node.operand.index)
+            var_ptr = self.builder.gep(arr_ptr, [zero, index], inbounds=True)
+            old_value = self.builder.load(var_ptr)
+        else:
+            raise NotImplementedError(f"Increment op {type(node.operand)} niet ondersteund")
 
         # Check of het een pointer is
         if isinstance(old_value.type, ir.PointerType):
@@ -654,8 +682,23 @@ class LLVMGenerator:
         return new_value if node.prefix else old_value
 
     def visit_DecrementNode(self, node: DecrementNode):
-        var_ptr = self.variables[node.operand.name]
-        old_value = self.builder.load(var_ptr, name=node.operand.name)
+        if isinstance(node.operand, IdentifierNode):
+            var_ptr = self.variables[node.operand.name]
+            old_value = self.builder.load(var_ptr, name=node.operand.name)
+        elif isinstance(node.operand, DereferenceNode):
+            # (*ptr)-- — laad de pointer, gebruik die als var_ptr
+            ptr = self.variables[node.operand.operand.name]
+            var_ptr = self.builder.load(ptr)
+            old_value = self.builder.load(var_ptr)
+        elif isinstance(node.operand, ArrayAccessNode):
+            # a[i]-- — bereken de pointer naar het element
+            zero = ir.Constant(ir.IntType(32), 0)
+            arr_ptr = self.variables[node.operand.array.name]
+            index = self.visit(node.operand.index)
+            var_ptr = self.builder.gep(arr_ptr, [zero, index], inbounds=True)
+            old_value = self.builder.load(var_ptr)
+        else:
+            raise NotImplementedError(f"Decrement op {type(node.operand)} niet ondersteund")
 
         # Check of het een pointer is
         if isinstance(old_value.type, ir.PointerType):
@@ -815,9 +858,17 @@ class LLVMGenerator:
         args = [fmt_arg]
         for arg in node.args:
             value = self.visit(arg)
+            # Array: geef pointer naar eerste element ipv de array zelf
+            if isinstance(value.type, ir.ArrayType):
+                ptr = self.variables[arg.name] if isinstance(arg, IdentifierNode) else None
+                if ptr is not None:
+                    value = self.builder.gep(ptr, [zero, zero], inbounds=True)
             # Float moet gepromoveerd worden naar double voor printf varargs
-            if isinstance(value.type, ir.FloatType):
+            elif isinstance(value.type, ir.FloatType):
                 value = self.builder.fpext(value, ir.DoubleType())
+            # Char (i8) moet gepromoveerd worden naar i32 voor printf varargs
+            elif isinstance(value.type, ir.IntType) and value.type.width < 32:
+                value = self.builder.sext(value, ir.IntType(32))
             args.append(value)
 
         # Roep printf aan
@@ -864,6 +915,9 @@ class LLVMGenerator:
             if isinstance(arg, AddressOfNode):
                 # &x → geef de pointer naar x direct mee
                 ptr = self.variables[arg.operand.name]
+                # Als het een array is, geef pointer naar eerste element
+                if isinstance(ptr.type.pointee, ir.ArrayType):
+                    ptr = self.builder.gep(ptr, [zero, zero], inbounds=True)
                 args.append(ptr)
             else:
                 value = self.visit(arg)
