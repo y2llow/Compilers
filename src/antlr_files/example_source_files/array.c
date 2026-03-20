@@ -6,5 +6,4 @@ int main() {
     int y = matrix[1][2];
     arr[2] = 42;
     values[0] = 100;
-    return 0;
 }

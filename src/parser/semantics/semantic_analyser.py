@@ -257,6 +257,18 @@ class SemanticAnalyzer:
                         getattr(node, 'column', 0),
                         f"Error: invalid operands to binary {op} (have '{left_base}{'*' * left_ptr}' and '{right_base}{'*' * right_ptr}')"
                     )
+                elif left_ptr > 0 and right_base == 'float':
+                    self.add_error(
+                        getattr(node, 'line', 0),
+                        getattr(node, 'column', 0),
+                        f"Error: invalid operands to binary {op} (have '{left_base}{'*' * left_ptr}' and '{right_base}')"
+                    )
+                elif right_ptr > 0 and left_base == 'float':
+                    self.add_error(
+                        getattr(node, 'line', 0),
+                        getattr(node, 'column', 0),
+                        f"Error: invalid operands to binary {op} (have '{left_base}' and '{right_base}{'*' * right_ptr}')"
+                    )
             return
 
         if left_base == 'void' or right_base == 'void':
@@ -279,6 +291,7 @@ class SemanticAnalyzer:
                     getattr(node, 'column', 0),
                     f"Warning: right operand of '{op}' is negative (undefined behavior)"
                 )
+
     def visit_UnaryOpNode(self, node):
         """Bezoek unaire operatie"""
         self._check_expression(node.operand)

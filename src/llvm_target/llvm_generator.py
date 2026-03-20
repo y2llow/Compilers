@@ -305,7 +305,7 @@ class LLVMGenerator:
                 elif isinstance(llvm_type, ir.FloatType) and isinstance(value.type, ir.IntType):
                     value = self.builder.sitofp(value, ir.FloatType())
                 elif isinstance(llvm_type, ir.IntType) and isinstance(value.type, ir.FloatType):
-                    value = self.builder.fptosi(value, ir.IntType(32))
+                    value = self.builder.fptosi(value, llvm_type)
                 elif isinstance(llvm_type, ir.IntType) and isinstance(value.type, ir.IntType):
                     if llvm_type.width != value.type.width:
                         if llvm_type.width > value.type.width:
@@ -386,7 +386,13 @@ class LLVMGenerator:
             if isinstance(target_llvm_type, ir.FloatType) and isinstance(value.type, ir.IntType):
                 value = self.builder.sitofp(value, ir.FloatType())
             elif isinstance(target_llvm_type, ir.IntType) and isinstance(value.type, ir.FloatType):
-                value = self.builder.fptosi(value, ir.IntType(32))
+                value = self.builder.fptosi(value, target_llvm_type)
+            elif isinstance(target_llvm_type, ir.IntType) and isinstance(value.type, ir.IntType):
+                if target_llvm_type.width != value.type.width:
+                    if target_llvm_type.width > value.type.width:
+                        value = self.builder.sext(value, target_llvm_type)
+                    else:
+                        value = self.builder.trunc(value, target_llvm_type)
             elif value.type != target_llvm_type:
                 # Incompatibele pointer types: bitcast om door te gaan (zoals GCC)
                 value = self.builder.bitcast(value, target_llvm_type)

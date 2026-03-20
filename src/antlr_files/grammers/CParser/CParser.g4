@@ -120,7 +120,7 @@ unary_expr
     | '&' unary_expr                    # addressOf
     | '++' unary_expr                   # prefixIncrement
     | '--' unary_expr                   # prefixDecrement
-    | '(' type_spec '*'* ')' unary_expr # cast
+    | '(' CONST? type_spec '*'* ')' unary_expr # cast
     | postfix_expr                      # postfixExprRule
     ;
 
