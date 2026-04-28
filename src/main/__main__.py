@@ -81,24 +81,24 @@ def main():
     print(ast)
     print()
 
-    # # ── Semantische analyse ───────────────────────────────────
-    # print("=== Semantic Analysis ===")
-    # analyzer = SemanticAnalyzer()
-    # analyzer.analyze(ast)
-    #
-    # if analyzer.errors:
-    #     error_output, error_count = analyzer.format_errors()
-    #     print(error_output)
-    #     print(f"{RED}Compilation failed with {error_count} semantic error(s).{RESET}")
-    #     sys.exit(1)
-    #
-    # if analyzer.warnings:
-    #     warning_output, warning_count = analyzer.format_warnings()
-    #     print(warning_output)
-    #
-    # print("Semantic analysis passed ✓")
-    # print()
-    
+    # ── Semantische analyse ───────────────────────────────────
+    print("=== Semantic Analysis ===")
+    analyzer = SemanticAnalyzer()
+    analyzer.analyze(ast)
+
+    if analyzer.errors:
+        error_output, error_count = analyzer.format_errors()
+        print(error_output)
+        print(f"{RED}Compilation failed with {error_count} semantic error(s).{RESET}")
+        sys.exit(1)
+
+    if analyzer.warnings:
+        warning_output, warning_count = analyzer.format_warnings()
+        print(warning_output)
+
+    print("Semantic analysis passed ✓")
+    print()
+
     # ── Constant folding ──────────────────────────────────────
     ast = ConstantFolder(enabled=not args.no_fold).visit(ast)
 

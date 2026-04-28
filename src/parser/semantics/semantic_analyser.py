@@ -1,9 +1,10 @@
 # ============================================================
-# Semantic Analyzer with Complete Type Checking
+# Semantic Analyzer with Type Checking
 # ============================================================
+
 from parser.semantics.symbol_table import SymbolTable
 from parser.ast_nodes import *
-# ANSI color codes
+
 RED = '\033[91m'
 YELLOW = '\033[93m'
 RESET = '\033[0m'
@@ -11,44 +12,36 @@ RESET = '\033[0m'
 
 class SemanticAnalyzer:
     """
-    Semantische analysator voor de AST met VOLLEDIG type checking.
+    Semantische analysator voor de AST.
 
-    Controleert:
-    1. Gebruik van niet-gedeclareerde variabelen
-    2. Redeclaratie van bestaande variabelen (in dezelfde scope)
-    3. Incompatibele type operaties/toewijzingen
-    4. Toewijzing aan rvalue
-    5. Toewijzing aan const variabelen
-    6. Array index type (moet int zijn)
-    7. Array initializer length matching
+    Werkt opnieuw met de nieuwe AST-structuur:
+        ProgramNode.top_level_items
+        FunctionDefNode.body
+        CompoundStmtNode.items
+
+    Controleert voorlopig vooral assignment 1-3 functionaliteit:
+    - main bestaat
+    - variabelen moeten gedeclareerd zijn
+    - geen redeclaratie in dezelfde scope
+    - geen assignment aan const
+    - basis type checking
+    - pointer checks
+    - array checks
+    - printf/scanf vereisen #include <stdio.h>
     """
-
-    # Type compatibility table
-    # Welke types kunnen naar welke types converteren?
-    TYPE_COMPATIBILITY = {
-        'int': {'int', 'float', 'char'},  # int kan naar int, float, char
-        'float': {'float', 'int'},  # float kan naar float, int
-        'char': {'char', 'int'},  # char kan naar char, int
-        'void': set(),  # void is incompatibel
-    }
-
-    # Pointer-to-type compatibility
-    # int* kan NIET automatisch naar float* gaan
-    POINTER_COMPATIBILITY = {
-        'int': {'int'},  # int* kan alleen naar int*
-        'float': {'float'},  # float* kan alleen naar float*
-        'char': {'char'},  # char* kan alleen naar char*
-        'void': {'int', 'float', 'char'},  # void* kan naar alles
-    }
 
     def __init__(self):
         self.symbol_table = SymbolTable()
         self.errors = []
         self.warnings = []
         self.stdio_included = False
+        self.current_function_return_type = None
+
+    # ============================================================
+    # Error / warning helpers
+    # ============================================================
 
     def add_error(self, line, column, message):
-        """Voeg semantische fout toe"""
         self.errors.append({
             'line': line,
             'column': column,
@@ -56,27 +49,25 @@ class SemanticAnalyzer:
         })
 
     def add_warning(self, line, column, message):
-        """Voeg waarschuwing toe"""
         self.warnings.append({
             'line': line,
             'column': column,
             'message': message
         })
 
-    # ── Public entry point ────────────────────────────────────
+    # ============================================================
+    # Public entry point
+    # ============================================================
 
     def analyze(self, node):
-        """
-        Voer semantische analyse uit op de AST.
-        Retourneert True als geen fouten, False anders.
-        """
         self.visit(node)
         return len(self.errors) == 0
 
-    # ── Internal dispatch ─────────────────────────────────────
+    # ============================================================
+    # Visitor dispatch
+    # ============================================================
 
     def visit(self, node):
-        """Visit een AST node"""
         if node is None:
             return
 
@@ -85,40 +76,217 @@ class SemanticAnalyzer:
         visitor(node)
 
     def generic_visit(self, node):
-        """Fallback als er geen specifieke visitor is"""
+        # Nieuwe toekomstige nodes mogen voorlopig niet crashen.
         pass
 
-    # ── Program structure ─────────────────────────────────────
+    # ============================================================
+    # Program / top-level
+    # ============================================================
 
-    def visit_MainFunctionNode(self, node):
+    def visit_ProgramNode(self, node):
+        has_main = False
+
+        # Eerst includes verwerken, zodat printf/scanf stdio kennen.
+        for item in node.top_level_items:
+            if isinstance(item, IncludeNode):
+                self.visit(item)
+
+        # Enum constants registreren als int constants.
+        for item in node.top_level_items:
+            if isinstance(item, EnumDeclNode):
+                self.visit(item)
+
+        # Top-level variabelen registreren.
+        for item in node.top_level_items:
+            if isinstance(item, VarDeclNode):
+                self.visit(item)
+
+        # Functies analyseren.
+        for item in node.top_level_items:
+            if isinstance(item, FunctionDefNode):
+                if item.name == "main":
+                    has_main = True
+                    if item.return_type != "int" or item.return_ptr != 0:
+                        self.add_error(
+                            getattr(item, 'line', 0),
+                            getattr(item, 'column', 0),
+                            "Error: main function must return int"
+                        )
+                self.visit(item)
+
+            elif isinstance(item, FunctionDeclNode):
+                self.visit(item)
+
+            elif isinstance(item, (TypedefNode, StructDeclNode, DefineNode)):
+                # Nog niet volledig semantisch uitgewerkt.
+                pass
+
+        if not has_main:
+            self.add_error(
+                0, 0,
+                "Error: missing 'int main()' function"
+            )
+
+    def visit_IncludeNode(self, node):
+        if node.header == 'stdio.h':
+            self.stdio_included = True
+
+    def visit_DefineNode(self, node):
+        pass
+
+    def visit_TypedefNode(self, node):
+        pass
+
+    def visit_StructDeclNode(self, node):
+        pass
+
+    def visit_EnumDeclNode(self, node):
+        """
+        Enum values gedragen zich als int constants.
+        Voorbeeld:
+            enum Color { RED, GREEN };
+        RED = 0, GREEN = 1
+        """
+        current_value = 0
+
+        for const in node.constants:
+            if const.value is not None:
+                current_value = const.value
+
+            success, existing = self.symbol_table.add_symbol(
+                const.name,
+                'int',
+                pointer_depth=0,
+                is_const=True,
+                line=getattr(const, 'line', 0),
+                column=getattr(const, 'column', 0),
+                array_dimensions=[]
+            )
+
+            if not success:
+                self.add_error(
+                    getattr(const, 'line', 0),
+                    getattr(const, 'column', 0),
+                    f"Error: enum constant '{const.name}' already declared at line {existing.line}, column {existing.column}"
+                )
+
+            current_value += 1
+
+    def visit_FunctionDeclNode(self, node):
+        # Forward declarations worden later uitgebreider gecontroleerd.
+        pass
+
+    def visit_FunctionDefNode(self, node):
+        old_return_type = self.current_function_return_type
+        self.current_function_return_type = (node.return_type, node.return_ptr)
+
         self.symbol_table.push_scope()
-        seen_non_decl = False  # ← nieuw
 
-        for stmt in node.statements:
-            if isinstance(stmt, VarDeclNode):
+        # Parameters toevoegen aan functie-scope.
+        for param in node.params:
+            success, existing = self.symbol_table.add_symbol(
+                param.name,
+                param.type_name,
+                param.pointer_depth,
+                param.is_const,
+                line=getattr(param, 'line', 0),
+                column=getattr(param, 'column', 0),
+                array_dimensions=param.array_dimensions
+            )
+
+            if not success:
+                self.add_error(
+                    getattr(param, 'line', 0),
+                    getattr(param, 'column', 0),
+                    f"Error: parameter '{param.name}' already declared at line {existing.line}, column {existing.column}"
+                )
+
+        # Function body zelf analyseren zonder extra scope,
+        # want de function scope bestaat hierboven al.
+        self._visit_block_items(node.body.items)
+
+        self.symbol_table.pop_scope()
+        self.current_function_return_type = old_return_type
+
+    def visit_CompoundStmtNode(self, node):
+        self.symbol_table.push_scope()
+        self._visit_block_items(node.items)
+        self.symbol_table.pop_scope()
+
+    def _visit_block_items(self, items):
+        seen_non_decl = False
+
+        for item in items:
+            if isinstance(item, VarDeclNode):
                 if seen_non_decl:
                     self.add_warning(
-                        getattr(stmt, 'line', 0),
-                        getattr(stmt, 'column', 0),
-                        f"Warning: ISO C90 forbids mixed declarations and code"
+                        getattr(item, 'line', 0),
+                        getattr(item, 'column', 0),
+                        "Warning: ISO C90 forbids mixed declarations and code"
                     )
             else:
-                seen_non_decl = True  # ← zodra er een niet-declaratie voorbijkomt
-            self.visit(stmt)
+                seen_non_decl = True
+
+            self.visit(item)
+
+    # ============================================================
+    # Control flow
+    # ============================================================
+
+    def visit_IfNode(self, node):
+        self._check_expression(node.condition)
+        self.visit(node.then_body)
+
+        if node.else_body is not None:
+            self.visit(node.else_body)
+
+    def visit_WhileNode(self, node):
+        self._check_expression(node.condition)
+        self.visit(node.body)
+
+    def visit_ForNode(self, node):
+        self.symbol_table.push_scope()
+
+        if node.init is not None:
+            self.visit(node.init)
+
+        if node.condition is not None:
+            self._check_expression(node.condition)
+
+        if node.update is not None:
+            self.visit(node.update)
+
+        self.visit(node.body)
 
         self.symbol_table.pop_scope()
 
-    def visit_ReturnNode(self, node):
-        """Bezoek return statement"""
-        # Check de return expressie (als aanwezig)
-        if node.value is not None:
-            self._check_expression(node.value)
+    def visit_BreakNode(self, node):
+        pass
 
-    # ── Statements ────────────────────────────────────────────
+    def visit_ContinueNode(self, node):
+        pass
+
+    def visit_SwitchNode(self, node):
+        self._check_expression(node.expression)
+
+        for case in node.cases:
+            self.visit(case)
+
+        if node.default is not None:
+            self.visit(node.default)
+
+    def visit_SwitchCaseNode(self, node):
+        self._check_expression(node.value)
+        self._visit_block_items(node.items)
+
+    def visit_SwitchDefaultNode(self, node):
+        self._visit_block_items(node.items)
+
+    # ============================================================
+    # Statements
+    # ============================================================
 
     def visit_VarDeclNode(self, node):
-        """Bezoek variabele declaratie"""
-        # Probeer variabele toe te voegen aan symbol table
         success, existing = self.symbol_table.add_symbol(
             node.name,
             node.type_name,
@@ -130,39 +298,140 @@ class SemanticAnalyzer:
         )
 
         if not success:
-            # Redeclaratie error
             self.add_error(
                 getattr(node, 'line', 0),
                 getattr(node, 'column', 0),
                 f"Error: variable '{node.name}' already declared at line {existing.line}, column {existing.column}"
             )
 
-        # Check de initializer expressie (als aanwezig)
-        if node.value is not None:
-            # Handle array initializers
-            if isinstance(node.value, ArrayInitializerNode):
-                self._check_array_initializer(node, node.value)
-            else:
-                if isinstance(node.value, BinaryOpNode):
-                    self.visit_BinaryOpNode(node.value)
+        if node.value is None:
+            return
 
-                value_type = self._get_expression_type(node.value)
+        if isinstance(node.value, ArrayInitializerNode):
+            self._check_array_initializer(node, node.value)
+            return
 
-                # Check type compatibiliteit
-                if value_type is not None and success:  # Alleen als geen redeclaratie
-                    self._check_type_assignment(
-                        target_type=(node.type_name, node.pointer_depth),
-                        value_type=value_type,
-                        target_name=node.name,
-                        node=node
+        self._check_expression(node.value)
+        value_type = self._get_expression_type(node.value)
+
+        if value_type is not None and success:
+            self._check_type_assignment(
+                target_type=(node.type_name, node.pointer_depth),
+                value_type=value_type,
+                target_name=node.name,
+                node=node
+            )
+
+    def visit_AssignNode(self, node):
+        self._check_lvalue(node.target)
+        self._check_expression(node.value)
+
+        target_type = self._get_lvalue_type(node.target)
+        value_type = self._get_expression_type(node.value)
+
+        if target_type is not None and value_type is not None:
+            self._check_type_assignment(
+                target_type=target_type,
+                value_type=value_type,
+                target_name=self._node_to_string(node.target),
+                node=node
+            )
+
+    def visit_ReturnNode(self, node):
+        if node.value is None:
+            if self.current_function_return_type is not None:
+                return_type, return_ptr = self.current_function_return_type
+                if return_type != 'void':
+                    self.add_error(
+                        getattr(node, 'line', 0),
+                        getattr(node, 'column', 0),
+                        f"Error: non-void function should return a value"
                     )
+            return
+
+        self._check_expression(node.value)
+
+        if self.current_function_return_type is not None:
+            expected_type = self.current_function_return_type
+            actual_type = self._get_expression_type(node.value)
+
+            if actual_type is not None:
+                self._check_type_assignment(
+                    target_type=expected_type,
+                    value_type=actual_type,
+                    target_name='return',
+                    node=node
+                )
+
+    def visit_BinaryOpNode(self, node):
+        self._check_expression(node)
+
+    def visit_UnaryOpNode(self, node):
+        self._check_expression(node)
+
+    def visit_DereferenceNode(self, node):
+        self._check_expression(node)
+
+    def visit_AddressOfNode(self, node):
+        self._check_expression(node)
+
+    def visit_IncrementNode(self, node):
+        self._check_lvalue(node.operand)
+
+    def visit_DecrementNode(self, node):
+        self._check_lvalue(node.operand)
+
+    def visit_CastNode(self, node):
+        self._check_expression(node.operand)
+
+    def visit_ArrayAccessNode(self, node):
+        self._check_expression(node)
+
+    def visit_ArrayInitializerNode(self, node):
+        for elem in node.elements:
+            if isinstance(elem, ArrayInitializerNode):
+                self.visit_ArrayInitializerNode(elem)
+            else:
+                self._check_expression(elem)
+
+    def visit_PrintfNode(self, node):
+        if not self.stdio_included:
+            self.add_error(
+                getattr(node, 'line', 0),
+                getattr(node, 'column', 0),
+                "Error: 'printf' used without #include <stdio.h>"
+            )
+            return
+
+        self._check_format_args(node.format_string, node.args, 'printf', node)
+
+        for arg in node.args:
+            self._check_expression(arg)
+
+    def visit_ScanfNode(self, node):
+        if not self.stdio_included:
+            self.add_error(
+                getattr(node, 'line', 0),
+                getattr(node, 'column', 0),
+                "Error: 'scanf' used without #include <stdio.h>"
+            )
+            return
+
+        self._check_format_args(node.format_string, node.args, 'scanf', node)
+
+        for arg in node.args:
+            self._check_expression(arg)
+
+    def visit_FunctionCallNode(self, node):
+        # Function checking komt later uitgebreider.
+        for arg in node.args:
+            self._check_expression(arg)
+
+    # ============================================================
+    # Array checks
+    # ============================================================
 
     def _check_array_initializer(self, var_decl, initializer):
-        """
-        Check array initializer:
-        - Size moet matchen met array declaration
-        - Elements moeten correct type zijn
-        """
         if not var_decl.array_dimensions:
             self.add_error(
                 getattr(initializer, 'line', 0),
@@ -171,7 +440,6 @@ class SemanticAnalyzer:
             )
             return
 
-        # Check eerste dimensie
         expected_size = var_decl.array_dimensions[0]
         actual_size = len(initializer.elements)
 
@@ -182,92 +450,367 @@ class SemanticAnalyzer:
                 f"Error: array initializer size mismatch for '{var_decl.name}': expected {expected_size}, got {actual_size}"
             )
 
-        # TODO: Check multidimensional array initializers
-        # For now, just check that all elements are literals
         for elem in initializer.elements:
             if isinstance(elem, ArrayInitializerNode):
-                # Nested initializer for multidimensional arrays
                 pass
-            elif not isinstance(elem, (IntLiteralNode, FloatLiteralNode, CharLiteralNode)):
-                self.add_warning(
-                    getattr(elem, 'line', 0),
-                    getattr(elem, 'column', 0),
-                    f"Warning: array initializer contains non-literal element"
-                )
+            else:
+                self._check_expression(elem)
 
-    def visit_AssignNode(self, node):
-        """Bezoek toewijzing"""
-        # Check linker kant (target) - moet lvalue zijn
-        self._check_lvalue(node.target)
+    # ============================================================
+    # Type helpers
+    # ============================================================
 
-        self._check_expression(node.value)
-        
-        # Get target type
-        target_type = self._get_lvalue_type(node.target)
+    def _get_expression_type(self, node):
+        if node is None:
+            return None
 
-        # Get value type
-        value_type = self._get_expression_type(node.value)
+        if isinstance(node, IntLiteralNode):
+            return ('int', 0)
 
-        # Check type compatibiliteit
-        if target_type is not None and value_type is not None:
-            self._check_type_assignment(
-                target_type=target_type,
-                value_type=value_type,
-                target_name=self._node_to_string(node.target),
-                node=node
-            )
+        if isinstance(node, FloatLiteralNode):
+            return ('float', 0)
 
-    def visit_BinaryOpNode(self, node):
-        """Bezoek binaire operatie als top-level statement"""
+        if isinstance(node, CharLiteralNode):
+            return ('char', 0)
+
+        if isinstance(node, StringLiteralNode):
+            return ('char', 1)
+
+        if isinstance(node, IdentifierNode):
+            symbol = self.symbol_table.lookup(node.name)
+            if symbol is None:
+                return None
+
+            if symbol.array_dimensions:
+                return (symbol.type_name, symbol.pointer_depth, True)
+
+            return (symbol.type_name, symbol.pointer_depth)
+
+        if isinstance(node, ArrayAccessNode):
+            array_type = self._get_expression_type(node.array)
+            if array_type is None:
+                return None
+
+            if len(array_type) > 2 and array_type[2]:
+                return (array_type[0], array_type[1])
+
+            base_type, ptr_depth = array_type[0], array_type[1]
+            if ptr_depth > 0:
+                return (base_type, ptr_depth - 1)
+
+            return None
+
+        if isinstance(node, DereferenceNode):
+            inner_type = self._get_expression_type(node.operand)
+            if inner_type is None:
+                return None
+
+            base_type, ptr_depth = inner_type[0], inner_type[1]
+            if ptr_depth > 0:
+                return (base_type, ptr_depth - 1)
+
+            return None
+
+        if isinstance(node, AddressOfNode):
+            inner_type = self._get_expression_type(node.operand)
+            if inner_type is None:
+                return None
+
+            base_type, ptr_depth = inner_type[0], inner_type[1]
+            return (base_type, ptr_depth + 1)
+
+        if isinstance(node, CastNode):
+            return (node.type_name, node.pointer_depth)
+
+        if isinstance(node, BinaryOpNode):
+            return self._get_binary_op_type(node)
+
+        if isinstance(node, UnaryOpNode):
+            return self._get_expression_type(node.operand)
+
+        if isinstance(node, AssignNode):
+            return self._get_expression_type(node.value)
+
+        if isinstance(node, IncrementNode):
+            return self._get_lvalue_type(node.operand)
+
+        if isinstance(node, DecrementNode):
+            return self._get_lvalue_type(node.operand)
+
+        if isinstance(node, TernaryOpNode):
+            then_type = self._get_expression_type(node.then_expr)
+            else_type = self._get_expression_type(node.else_expr)
+            return then_type if then_type == else_type else then_type or else_type
+
+        if isinstance(node, SizeofNode):
+            return ('int', 0)
+
+        if isinstance(node, FunctionCallNode):
+            # Voorlopig int aannemen. Echte function table komt later.
+            return ('int', 0)
+
+        return None
+
+    def _get_binary_op_type(self, node):
         left_type = self._get_expression_type(node.left)
         right_type = self._get_expression_type(node.right)
 
-        if left_type is not None and right_type is not None:
-            self._check_binary_operation(node.op, left_type, right_type, node)
+        if left_type is None or right_type is None:
+            return None
 
-        self._check_expression(node.left)
-        self._check_expression(node.right)
+        left_base, left_ptr = left_type[0], left_type[1]
+        right_base, right_ptr = right_type[0], right_type[1]
+
+        if left_ptr > 0 or right_ptr > 0:
+            return None
+
+        if left_base == 'float' or right_base == 'float':
+            return ('float', 0)
+
+        return ('int', 0)
+
+    def _get_lvalue_type(self, node):
+        if isinstance(node, IdentifierNode):
+            symbol = self.symbol_table.lookup(node.name)
+            if symbol is None:
+                return None
+            return (symbol.type_name, symbol.pointer_depth)
+
+        if isinstance(node, ArrayAccessNode):
+            array_type = self._get_expression_type(node.array)
+            if array_type is None:
+                return None
+
+            if len(array_type) > 2 and array_type[2]:
+                return (array_type[0], array_type[1])
+
+            base_type, ptr_depth = array_type[0], array_type[1]
+            if ptr_depth > 0:
+                return (base_type, ptr_depth - 1)
+
+            return None
+
+        if isinstance(node, DereferenceNode):
+            inner_type = self._get_expression_type(node.operand)
+            if inner_type is None:
+                return None
+
+            base_type, ptr_depth = inner_type[0], inner_type[1]
+            if ptr_depth > 0:
+                return (base_type, ptr_depth - 1)
+
+            return None
+
+        return None
+
+    # ============================================================
+    # Expression checks
+    # ============================================================
+
+    def _check_expression(self, node):
+        if node is None:
+            return
+
+        if isinstance(node, IdentifierNode):
+            self._check_identifier(node)
+
+        elif isinstance(node, (IntLiteralNode, FloatLiteralNode, CharLiteralNode, StringLiteralNode)):
+            pass
+
+        elif isinstance(node, BinaryOpNode):
+            self._check_expression(node.left)
+            self._check_expression(node.right)
+
+            left_type = self._get_expression_type(node.left)
+            right_type = self._get_expression_type(node.right)
+
+            if left_type is not None and right_type is not None:
+                self._check_binary_operation(node.op, left_type, right_type, node)
+
+        elif isinstance(node, UnaryOpNode):
+            self._check_expression(node.operand)
+
+        elif isinstance(node, DereferenceNode):
+            self._check_expression(node.operand)
+            operand_type = self._get_expression_type(node.operand)
+
+            if operand_type is not None:
+                base_type, ptr_depth = operand_type[0], operand_type[1]
+                if ptr_depth == 0:
+                    self.add_error(
+                        getattr(node, 'line', 0),
+                        getattr(node, 'column', 0),
+                        f"Error: cannot dereference non-pointer type '{base_type}'"
+                    )
+
+        elif isinstance(node, AddressOfNode):
+            if isinstance(node.operand, (IntLiteralNode, FloatLiteralNode, CharLiteralNode)):
+                self.add_error(
+                    getattr(node, 'line', 0),
+                    getattr(node, 'column', 0),
+                    "Error: lvalue required as unary '&' operand"
+                )
+                return
+
+            self._check_expression(node.operand)
+
+        elif isinstance(node, IncrementNode):
+            self._check_lvalue(node.operand)
+
+        elif isinstance(node, DecrementNode):
+            self._check_lvalue(node.operand)
+
+        elif isinstance(node, CastNode):
+            self._check_expression(node.operand)
+
+        elif isinstance(node, ArrayAccessNode):
+            array_type = self._get_expression_type(node.array)
+
+            if array_type is not None:
+                is_array = len(array_type) > 2 and array_type[2]
+                ptr_depth = array_type[1]
+
+                if not is_array and ptr_depth == 0:
+                    self.add_error(
+                        getattr(node, 'line', 0),
+                        getattr(node, 'column', 0),
+                        "Error: subscript applied to non-array/pointer type"
+                    )
+
+            index_type = self._get_expression_type(node.index)
+
+            if index_type is not None:
+                base_type, ptr_depth = index_type[0], index_type[1]
+                if base_type != 'int' or ptr_depth > 0:
+                    self.add_error(
+                        getattr(node.index, 'line', 0),
+                        getattr(node.index, 'column', 0),
+                        "Error: array subscript is not an integer"
+                    )
+
+            self._check_expression(node.array)
+            self._check_expression(node.index)
+
+        elif isinstance(node, AssignNode):
+            self.visit_AssignNode(node)
+
+        elif isinstance(node, FunctionCallNode):
+            self.visit_FunctionCallNode(node)
+
+        elif isinstance(node, TernaryOpNode):
+            self._check_expression(node.condition)
+            self._check_expression(node.then_expr)
+            self._check_expression(node.else_expr)
+
+        elif isinstance(node, SizeofNode):
+            if not node.is_type and node.operand is not None:
+                self._check_expression(node.operand)
+
+    def _check_identifier(self, node):
+        symbol = self.symbol_table.lookup(node.name)
+
+        if symbol is None:
+            self.add_error(
+                getattr(node, 'line', 0),
+                getattr(node, 'column', 0),
+                f"Error: variable '{node.name}' is not declared"
+            )
+
+    def _check_lvalue(self, node):
+        if isinstance(node, IdentifierNode):
+            symbol = self.symbol_table.lookup(node.name)
+
+            if symbol is None:
+                self.add_error(
+                    getattr(node, 'line', 0),
+                    getattr(node, 'column', 0),
+                    f"Error: variable '{node.name}' is not declared"
+                )
+                return
+
+            if symbol.is_const and symbol.pointer_depth == 0:
+                self.add_error(
+                    getattr(node, 'line', 0),
+                    getattr(node, 'column', 0),
+                    f"Error: cannot assign to const variable '{node.name}'"
+                )
+
+        elif isinstance(node, ArrayAccessNode):
+            self._check_expression(node)
+
+        elif isinstance(node, DereferenceNode):
+            self._check_expression(node.operand)
+
+            if isinstance(node.operand, IdentifierNode):
+                symbol = self.symbol_table.lookup(node.operand.name)
+
+                if symbol is not None and symbol.is_const and symbol.pointer_depth > 0:
+                    self.add_error(
+                        getattr(node, 'line', 0),
+                        getattr(node, 'column', 0),
+                        f"Error: assignment of read-only location '*{node.operand.name}'"
+                    )
+
+        elif isinstance(node, (IntLiteralNode, FloatLiteralNode, CharLiteralNode, StringLiteralNode)):
+            self.add_error(
+                getattr(node, 'line', 0),
+                getattr(node, 'column', 0),
+                "Error: cannot assign to literal"
+            )
+
+        elif isinstance(node, (UnaryOpNode, BinaryOpNode, AddressOfNode)):
+            self.add_error(
+                getattr(node, 'line', 0),
+                getattr(node, 'column', 0),
+                "Error: cannot assign to expression result"
+            )
+
+    # ============================================================
+    # Operation / assignment checks
+    # ============================================================
 
     def _check_binary_operation(self, op, left_type, right_type, node):
         left_base, left_ptr = left_type[0], left_type[1]
         right_base, right_ptr = right_type[0], right_type[1]
 
-        # Pointer vergelijkingen en operaties
         if left_ptr > 0 or right_ptr > 0:
             if op in ('==', '!=', '<', '>', '<=', '>='):
-                # pointer vs integer
                 if (left_ptr > 0 and right_ptr == 0) or (left_ptr == 0 and right_ptr > 0):
                     self.add_warning(
                         getattr(node, 'line', 0),
                         getattr(node, 'column', 0),
-                        f"Warning: comparison between pointer and integer"
+                        "Warning: comparison between pointer and integer"
                     )
-                # verschillende pointer types
+
                 elif left_ptr > 0 and right_ptr > 0 and left_base != right_base:
                     self.add_warning(
                         getattr(node, 'line', 0),
                         getattr(node, 'column', 0),
-                        f"Warning: comparison of distinct pointer types lacks a cast"
+                        "Warning: comparison of distinct pointer types lacks a cast"
                     )
+
             elif op in ('+', '-'):
                 if left_ptr > 0 and right_ptr > 0:
                     self.add_error(
                         getattr(node, 'line', 0),
                         getattr(node, 'column', 0),
-                        f"Error: invalid operands to binary {op} (have '{left_base}{'*' * left_ptr}' and '{right_base}{'*' * right_ptr}')"
+                        f"Error: invalid operands to binary {op}"
                     )
+
                 elif left_ptr > 0 and right_base == 'float':
                     self.add_error(
                         getattr(node, 'line', 0),
                         getattr(node, 'column', 0),
-                        f"Error: invalid operands to binary {op} (have '{left_base}{'*' * left_ptr}' and '{right_base}')"
+                        f"Error: invalid operands to binary {op}"
                     )
+
                 elif right_ptr > 0 and left_base == 'float':
                     self.add_error(
                         getattr(node, 'line', 0),
                         getattr(node, 'column', 0),
-                        f"Error: invalid operands to binary {op} (have '{left_base}' and '{right_base}{'*' * right_ptr}')"
+                        f"Error: invalid operands to binary {op}"
                     )
+
             return
 
         if left_base == 'void' or right_base == 'void':
@@ -281,9 +824,10 @@ class SemanticAnalyzer:
         if op in ('<<', '>>'):
             right = node.right
             is_negative = (
-                    (isinstance(right, UnaryOpNode) and right.op == '-') or
-                    (isinstance(right, IntLiteralNode) and right.value < 0)
+                (isinstance(right, UnaryOpNode) and right.op == '-') or
+                (isinstance(right, IntLiteralNode) and right.value < 0)
             )
+
             if is_negative:
                 self.add_warning(
                     getattr(node, 'line', 0),
@@ -291,229 +835,11 @@ class SemanticAnalyzer:
                     f"Warning: right operand of '{op}' is negative (undefined behavior)"
                 )
 
-    def visit_UnaryOpNode(self, node):
-        """Bezoek unaire operatie"""
-        self._check_expression(node.operand)
-
-    def visit_DereferenceNode(self, node):
-        expr_type = self._get_expression_type(node.operand)
-
-        if expr_type is not None:
-            base_type, ptr_depth = expr_type
-            if ptr_depth == 0:
-                self.add_error(
-                    getattr(node, 'line', 0),
-                    getattr(node, 'column', 0),
-                    f"Error: cannot dereference non-pointer type '{base_type}'"
-                )
-
-    def visit_AddressOfNode(self, node):
-        """Bezoek address-of operatie"""
-        if isinstance(node.operand, (IntLiteralNode, FloatLiteralNode, CharLiteralNode)):
-            self.add_error(
-                getattr(node, 'line', 0),
-                getattr(node, 'column', 0),
-                f"Error: lvalue required as unary '&' operand"
-            )
-            return
-        self._check_expression(node.operand)
-    def visit_IncrementNode(self, node):
-        """Bezoek increment operatie"""
-        self._check_lvalue(node.operand)
-
-    def visit_DecrementNode(self, node):
-        """Bezoek decrement operatie"""
-        self._check_lvalue(node.operand)
-
-    def visit_CastNode(self, node):
-        """Bezoek cast operatie"""
-        expr_type = self._get_expression_type(node.operand)
-        # Casts zijn altijd toegestaan (C philosophy)
-        # Maar we kunnen een warning geven
-        self._check_expression(node.operand)
-
-    def visit_ArrayAccessNode(self, node):
-        """Bezoek array access: arr[index]"""
-        # Check dat het array is
-        array_type = self._get_expression_type(node.array)
-        if array_type is not None:
-            base_type, ptr_depth, is_array = array_type if len(array_type) > 2 else (*array_type, False)
-            if not is_array and ptr_depth == 0:
-                self.add_error(
-                    getattr(node, 'line', 0),
-                    getattr(node, 'column', 0),
-                    f"Error: subscript applied to non-array/pointer type"
-                )
-
-        # Check dat index int is
-        index_type = self._get_expression_type(node.index)
-        if index_type is not None:
-            base_type, ptr_depth = index_type
-            if base_type != 'int' or ptr_depth > 0:
-                self.add_error(
-                    getattr(node.index, 'line', 0),
-                    getattr(node.index, 'column', 0),
-                    f"Error: array subscript is not an integer"
-                )
-
-        self._check_expression(node.array)
-        self._check_expression(node.index)
-
-    def visit_ArrayInitializerNode(self, node):
-        """Bezoek array initializer"""
-        for elem in node.elements:
-            self._check_expression(elem)
-
-    # ── Type Checking Methods ─────────────────────────────────
-
-    def _get_expression_type(self, node):
-        """
-        Bepaal het type van een expressie.
-        Retourneert: (type_name, pointer_depth) of None
-
-        Voorbeelden:
-            IntLiteralNode(5) → ('int', 0)
-            FloatLiteralNode(3.14) → ('float', 0)
-            IdentifierNode('x') → ('int', 1) als x is int*
-        """
-        if node is None:
-            return None
-
-        if isinstance(node, IntLiteralNode):
-            return ('int', 0)
-
-        elif isinstance(node, FloatLiteralNode):
-            return ('float', 0)
-
-        elif isinstance(node, CharLiteralNode):
-            return ('char', 0)
-
-        elif isinstance(node, StringLiteralNode):
-            return ('char', 1)
-
-        elif isinstance(node, IdentifierNode):
-            symbol = self.symbol_table.lookup(node.name)
-            if symbol is None:
-                return None
-            # Return array info if applicable
-            if symbol.array_dimensions:
-                return (symbol.type_name, symbol.pointer_depth, True)
-            return (symbol.type_name, symbol.pointer_depth)
-
-        elif isinstance(node, ArrayAccessNode):
-            # arr[i] has type of base array element
-            array_type = self._get_expression_type(node.array)
-            if array_type is None:
-                return None
-            if len(array_type) > 2 and array_type[2]:  # is_array
-                # Strip one dimension
-                return (array_type[0], array_type[1])
-            # If it's a pointer, dereference it
-            base_type, ptr_depth = array_type[0], array_type[1]
-            if ptr_depth > 0:
-                return (base_type, ptr_depth - 1)
-            return None
-
-        elif isinstance(node, DereferenceNode):
-            # *ptr: als ptr is int*, dan type is int
-            inner_type = self._get_expression_type(node.operand)
-            if inner_type is None:
-                return None
-            base_type, ptr_depth = inner_type[0], inner_type[1]
-            if ptr_depth > 0:
-                return (base_type, ptr_depth - 1)
-            return None
-
-        elif isinstance(node, AddressOfNode):
-            # &x: als x is int, dan type is int*
-            inner_type = self._get_expression_type(node.operand)
-            if inner_type is None:
-                return None
-            base_type, ptr_depth = inner_type[0], inner_type[1]
-            return (base_type, ptr_depth + 1)
-
-        elif isinstance(node, CastNode):
-            # (int) x: type is int
-            return (node.type_name, node.pointer_depth)
-
-        elif isinstance(node, BinaryOpNode):
-            # Type van binaire operatie
-            return self._get_binary_op_type(node)
-
-        elif isinstance(node, UnaryOpNode):
-            # Type van unaire operatie
-            return self._get_expression_type(node.operand)
-
-        elif isinstance(node, AssignNode):
-            # Type van assignment is type van value
-            return self._get_expression_type(node.value)
-
-        return None
-
-    def _get_binary_op_type(self, node):
-        """Bepaal type van binaire operatie"""
-        left_type = self._get_expression_type(node.left)
-        right_type = self._get_expression_type(node.right)
-
-        if left_type is None or right_type is None:
-            return None
-
-        left_base, left_ptr = left_type[0], left_type[1]
-        right_base, right_ptr = right_type[0], right_type[1]
-
-        # Pointers kunnen niet gearithmetiseerd worden
-        if left_ptr > 0 or right_ptr > 0:
-            return None
-
-        # float OP float → float
-        if left_base == 'float' or right_base == 'float':
-            return ('float', 0)
-
-        # int OP int → int (ook char)
-        return ('int', 0)
-
-    def _get_lvalue_type(self, node):
-        """Bepaal type van een lvalue (assignment target)"""
-        if isinstance(node, IdentifierNode):
-            symbol = self.symbol_table.lookup(node.name)
-            if symbol is None:
-                return None
-            return (symbol.type_name, symbol.pointer_depth)
-
-        elif isinstance(node, ArrayAccessNode):
-            # arr[i] = value; — type is base element type
-            array_type = self._get_expression_type(node.array)
-            if array_type is None:
-                return None
-            if len(array_type) > 2 and array_type[2]:  # is_array
-                return (array_type[0], array_type[1])
-            base_type, ptr_depth = array_type[0], array_type[1]
-            if ptr_depth > 0:
-                return (base_type, ptr_depth - 1)
-            return None
-
-        elif isinstance(node, DereferenceNode):
-            inner_type = self._get_expression_type(node.operand)
-            if inner_type is None:
-                return None
-            base_type, ptr_depth = inner_type[0], inner_type[1]
-            if ptr_depth > 0:
-                return (base_type, ptr_depth - 1)
-            return None
-
-        return None
-
     def _check_type_assignment(self, target_type, value_type, target_name, node):
-        """
-        Check of assignment type-compatibel is.
-
-        target_type: (type_name, pointer_depth) waar we naar toewijzen
-        value_type: (type_name, pointer_depth) wat we toewijzen
-        """
         target_base, target_ptr = target_type[0], target_type[1]
         value_base, value_ptr = value_type[0], value_type[1]
 
-        # Allow string assignment to char array: char buf[50] = "test"
+        # char array = "text"
         if target_base == 'char' and target_ptr == 0 and value_base == 'char' and value_ptr == 1:
             return
 
@@ -521,55 +847,43 @@ class SemanticAnalyzer:
             self.add_error(
                 getattr(node, 'line', 0),
                 getattr(node, 'column', 0),
-                f"Error: incompatible types when initializing type '{target_base}' using type '{value_base}{'*' * value_ptr}'"
+                f"Error: incompatible types when assigning type '{value_base}{'*' * value_ptr}' to '{target_base}'"
             )
             return
 
-        # Pointer assignments
         if target_ptr > 0 or value_ptr > 0:
-            self._check_pointer_assignment(
-                target_type, value_type, target_name, node
-            )
+            self._check_pointer_assignment(target_type, value_type, target_name, node)
             return
 
-        # Non-pointer assignments
-        self._check_scalar_assignment(
-            target_base, value_base, target_name, node
-        )
+        self._check_scalar_assignment(target_base, value_base, target_name, node)
 
     def _check_pointer_assignment(self, target_type, value_type, target_name, node):
         target_base, target_ptr = target_type[0], target_type[1]
         value_base, value_ptr = value_type[0], value_type[1]
 
-        # 0 mag altijd toegewezen worden aan pointer (null pointer)
         value_node = getattr(node, 'value', None)
         if isinstance(value_node, IntLiteralNode) and value_node.value == 0:
             return
 
-        # void* kan naar alles
         if value_base == 'void':
             return
 
-        # Moet exact hetzelfde aantal sterren hebben
         if target_ptr != value_ptr:
-            self.add_warning(  # ← was add_error
+            self.add_warning(
                 getattr(node, 'line', 0),
                 getattr(node, 'column', 0),
                 f"Warning: assignment to '{target_base}{'*' * target_ptr}' from incompatible pointer type '{value_base}{'*' * value_ptr}'"
             )
             return
 
-        # Types moeten compatibel zijn
         if target_base != value_base and target_base != 'void':
-            self.add_warning(  # ← was add_error
+            self.add_warning(
                 getattr(node, 'line', 0),
                 getattr(node, 'column', 0),
                 f"Warning: assignment to '{target_base}{'*' * target_ptr}' from incompatible pointer type '{value_base}{'*' * value_ptr}'"
             )
 
     def _check_scalar_assignment(self, target_type, value_type, target_name, node):
-        """Check scalar (non-pointer) assignments"""
-        # int = float: warning
         if target_type == 'int' and value_type == 'float':
             self.add_warning(
                 getattr(node, 'line', 0),
@@ -578,15 +892,23 @@ class SemanticAnalyzer:
             )
             return
 
-        # float = int: OK (implicit conversion)
-        if target_type == 'float' and value_type == 'int':
+        if target_type == 'char' and value_type in ('int', 'float'):
+            self.add_warning(
+                getattr(node, 'line', 0),
+                getattr(node, 'column', 0),
+                f"Warning: implicit conversion from '{value_type}' to 'char' in assignment to '{target_name}'"
+            )
             return
 
-        # int/char/float = int/char/float: OK (implicit conversion)
-        if target_type in ('int', 'char', 'float') and value_type in ('int', 'char', 'float'):
+        if target_type == 'float' and value_type in ('int', 'char'):
             return
 
-        # void type: error
+        if target_type == 'int' and value_type == 'char':
+            return
+
+        if target_type == value_type:
+            return
+
         if target_type == 'void' or value_type == 'void':
             self.add_error(
                 getattr(node, 'line', 0),
@@ -594,274 +916,83 @@ class SemanticAnalyzer:
                 f"Error: cannot assign '{value_type}' to '{target_type}'"
             )
 
-    # ── Expression checking ───────────────────────────────────
-
-    def _check_expression(self, node):
-        """Controleer of expressie geldig is"""
-        if node is None:
-            return
-
-        if isinstance(node, IdentifierNode):
-            self._check_identifier(node)
-        elif isinstance(node, (IntLiteralNode, FloatLiteralNode, CharLiteralNode)):
-            # Literals zijn altijd OK
-            pass
-        elif isinstance(node, BinaryOpNode):
-            self._check_expression(node.left)
-            self._check_expression(node.right)
-            left_type = self._get_expression_type(node.left)
-            right_type = self._get_expression_type(node.right)
-            if left_type is not None and right_type is not None:
-                self._check_binary_operation(node.op, left_type, right_type, node)
-        elif isinstance(node, UnaryOpNode):
-            self._check_expression(node.operand)
-        elif isinstance(node, DereferenceNode):
-            self._check_expression(node.operand)
-            operand_type = self._get_expression_type(node.operand)
-            if operand_type is not None:
-                base_type, ptr_depth = operand_type
-                if ptr_depth == 0:
-                    self.add_error(
-                        getattr(node, 'line', 0),
-                        getattr(node, 'column', 0),
-                        f"Error: cannot dereference non-pointer type '{base_type}'"
-                    )
-        elif isinstance(node, AddressOfNode):
-            if isinstance(node.operand, (IntLiteralNode, FloatLiteralNode, CharLiteralNode)):
-                self.add_error(
-                    getattr(node, 'line', 0),
-                    getattr(node, 'column', 0),
-                    f"Error: lvalue required as unary '&' operand"
-                )
-                return
-            self._check_expression(node.operand)
-        elif isinstance(node, IncrementNode):
-            self._check_lvalue(node.operand)
-        elif isinstance(node, DecrementNode):
-            self._check_lvalue(node.operand)
-        elif isinstance(node, CastNode):
-            self._check_expression(node.operand)
-        elif isinstance(node, ArrayAccessNode):
-            self._check_expression(node.array)
-            self._check_expression(node.index)
-        elif isinstance(node, AssignNode):
-            # Toewijzing als expressie (zoals in C mogelijk)
-            self._check_lvalue(node.target)
-            self._check_expression(node.value)
-
-    def _check_identifier(self, node):
-        """
-        Controleer of identifier geldig is (gedeclareerd).
-        Errors:
-        - Variabele niet gedeclareerd
-        """
-        symbol = self.symbol_table.lookup(node.name)
-
-        if symbol is None:
-            self.add_error(
-                getattr(node, 'line', 0),
-                getattr(node, 'column', 0),
-                f"Error: variable '{node.name}' is not declared"
-            )
-
-    def _check_lvalue(self, node):
-        """
-        Controleer of een node een geldig lvalue is.
-        Errors:
-        - Niet-gedeclareerde variabele
-        - Toewijzing aan const variabele
-        - Toewijzing aan literal/rvalue
-        """
-        if isinstance(node, IdentifierNode):
-            # Check of variabele gedeclareerd is
-            symbol = self.symbol_table.lookup(node.name)
-
-            if symbol is None:
-                self.add_error(
-                    getattr(node, 'line', 0),
-                    getattr(node, 'column', 0),
-                    f"Error: variable '{node.name}' is not declared"
-                )
-                return
-
-            # Check of variabele const is
-            # Check of variabele const is
-            # const int* mag wel herassigned worden (de pointer is mutable, de waarde niet)
-            # alleen const zonder pointer is volledig immutable
-            if symbol.is_const and symbol.pointer_depth == 0:
-                self.add_error(
-                    getattr(node, 'line', 0),
-                    getattr(node, 'column', 0),
-                    f"Error: cannot assign to const variable '{node.name}'"
-                )
-
-        elif isinstance(node, ArrayAccessNode):
-            # arr[i] is an lvalue, but we need to check both parts
-            self._check_expression(node.array)
-            self._check_expression(node.index)
-
-        elif isinstance(node, DereferenceNode):
-            # Dereference kann lvalue sein, aber we moeten the operand checken
-            self._check_expression(node.operand)
-            if isinstance(node.operand, IdentifierNode):
-                symbol = self.symbol_table.lookup(node.operand.name)
-                if symbol is not None and symbol.is_const and symbol.pointer_depth > 0:
-                    self.add_error(
-                        getattr(node, 'line', 0),
-                        getattr(node, 'column', 0),
-                        f"Error: assignment of read-only location '*{node.operand.name}'"
-                    )
-
-
-        elif isinstance(node, (IntLiteralNode, FloatLiteralNode, CharLiteralNode)):
-            # Kan niet toewijzen aan literal
-            self.add_error(
-                getattr(node, 'line', 0),
-                getattr(node, 'column', 0),
-                f"Error: cannot assign to literal"
-            )
-
-        elif isinstance(node, UnaryOpNode):
-            # Unaire operaties kunnen rvalue zijn
-            self.add_error(
-                getattr(node, 'line', 0),
-                getattr(node, 'column', 0),
-                f"Error: cannot assign to expression result"
-            )
-
-        elif isinstance(node, BinaryOpNode):
-            # Binaire operaties kunnen rvalue zijn
-            self.add_error(
-                getattr(node, 'line', 0),
-                getattr(node, 'column', 0),
-                f"Error: cannot assign to expression result"
-            )
-
-        elif isinstance(node, AddressOfNode):
-            # & gives rvalue
-            self.add_error(
-                getattr(node, 'line', 0),
-                getattr(node, 'column', 0),
-                f"Error: cannot assign to expression result"
-            )
-
-    # ── Helper methods ────────────────────────────────────────
-
-    def _node_to_string(self, node):
-        """Convert AST node to string representation"""
-        if isinstance(node, IdentifierNode):
-            return node.name
-        elif isinstance(node, DereferenceNode):
-            return f"*{self._node_to_string(node.operand)}"
-        elif isinstance(node, ArrayAccessNode):
-            return f"{self._node_to_string(node.array)}[{self._node_to_string(node.index)}]"
-        elif isinstance(node, IntLiteralNode):
-            return str(node.value)
-        elif isinstance(node, FloatLiteralNode):
-            return str(node.value)
-        else:
-            return "expression"
-
-    # ── Output methods ────────────────────────────────────────
-
-    def format_errors(self):
-        """
-        Format alle fouten voor output.
-        Retourneert (output_string, error_count)
-        """
-        if not self.errors:
-            return "", 0
-
-        output = []
-
-        # Sort errors by line number
-        sorted_errors = sorted(self.errors, key=lambda e: (e['line'], e['column']))
-
-        for error in sorted_errors:
-            line_num = error['line']
-            column = error['column']
-            message = error['message']
-
-            output.append(f"{RED}[Semantic Error] line {line_num}, column {column}: {message}{RESET}")
-
-        return '\n'.join(output) + '\n', len(self.errors)
-
-    def format_warnings(self):
-        """
-        Format alle waarschuwingen voor output.
-        Retourneert (output_string, warning_count)
-        """
-        if not self.warnings:
-            return "", 0
-
-        output = []
-
-        # Sort warnings by line number
-        sorted_warnings = sorted(self.warnings, key=lambda w: (w['line'], w['column']))
-
-        for warning in sorted_warnings:
-            line_num = warning['line']
-            column = warning['column']
-            message = warning['message']
-
-            output.append(f"{YELLOW}[Semantic Warning] line {line_num}, column {column}: {message}{RESET}")
-
-        return '\n'.join(output) + '\n', len(self.warnings)
-
-    # ── include methods ────────────────────────────────────────
-
-    def visit_ProgramNode(self, node):
-        for inc in node.includes:
-            self.visit(inc)
-
-        if not getattr(node, 'has_real_main', True):
-            self.add_error(
-                0, 0,
-                "Error: missing 'int main()' function"
-            )
-            return
-
-        self.visit(node.main_function)
-
-    def visit_IncludeNode(self, node):
-        if node.header == 'stdio.h':
-            self.stdio_included = True
-
-    def visit_PrintfNode(self, node):
-        if not self.stdio_included:
-            self.add_error(
-                getattr(node, 'line', 0),
-                getattr(node, 'column', 0),
-                "Error: 'printf' used without #include <stdio.h>"
-            )
-            return
-        # Validate format string vs argument count
-        self._check_format_args(node.format_string, node.args, 'printf', node)
-        for arg in node.args:
-            self._check_expression(arg)
-
-    def visit_ScanfNode(self, node):
-        if not self.stdio_included:
-            self.add_error(
-                getattr(node, 'line', 0),
-                getattr(node, 'column', 0),
-                "Error: 'scanf' used without #include <stdio.h>"
-            )
-            return
-        self._check_format_args(node.format_string, node.args, 'scanf', node)
-        for arg in node.args:
-            self._check_expression(arg)
+    # ============================================================
+    # Format string checking
+    # ============================================================
 
     def _check_format_args(self, fmt: str, args: list, func_name: str, node):
-        """Count format specifiers (%d, %f, %s, %c, %x) and compare to arg count."""
         import re
-        # Match %[width][code] but not %%
+
+        # Match %[width][code], maar negeer %%
         specifiers = re.findall(r'(?<!%)%(?:\d+)?[dxsfc]', fmt)
+
         expected = len(specifiers)
         actual = len(args)
+
         if expected != actual:
             self.add_error(
                 getattr(node, 'line', 0),
                 getattr(node, 'column', 0),
                 f"Error: {func_name} format expects {expected} argument(s), got {actual}"
             )
+
+    # ============================================================
+    # Output methods
+    # ============================================================
+
+    def format_errors(self):
+        if not self.errors:
+            return "", 0
+
+        output = []
+
+        sorted_errors = sorted(self.errors, key=lambda e: (e['line'], e['column']))
+
+        for error in sorted_errors:
+            line_num = error['line']
+            column = error['column']
+            message = error['message']
+            output.append(f"{RED}[Semantic Error] line {line_num}, column {column}: {message}{RESET}")
+
+        return '\n'.join(output) + '\n', len(self.errors)
+
+    def format_warnings(self):
+        if not self.warnings:
+            return "", 0
+
+        output = []
+
+        sorted_warnings = sorted(self.warnings, key=lambda w: (w['line'], w['column']))
+
+        for warning in sorted_warnings:
+            line_num = warning['line']
+            column = warning['column']
+            message = warning['message']
+            output.append(f"{YELLOW}[Semantic Warning] line {line_num}, column {column}: {message}{RESET}")
+
+        return '\n'.join(output) + '\n', len(self.warnings)
+
+    # ============================================================
+    # Small helpers
+    # ============================================================
+
+    def _node_to_string(self, node):
+        if isinstance(node, IdentifierNode):
+            return node.name
+
+        if isinstance(node, DereferenceNode):
+            return f"*{self._node_to_string(node.operand)}"
+
+        if isinstance(node, ArrayAccessNode):
+            return f"{self._node_to_string(node.array)}[{self._node_to_string(node.index)}]"
+
+        if isinstance(node, IntLiteralNode):
+            return str(node.value)
+
+        if isinstance(node, FloatLiteralNode):
+            return str(node.value)
+
+        if isinstance(node, CharLiteralNode):
+            return node.value
+
+        return "expression"
