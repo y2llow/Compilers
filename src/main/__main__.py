@@ -98,9 +98,9 @@ def main():
     #
     # print("Semantic analysis passed ✓")
     # print()
-    #
-    # # ── Constant folding ──────────────────────────────────────
-    # ast = ConstantFolder(enabled=not args.no_fold).visit(ast)
+    
+    # ── Constant folding ──────────────────────────────────────
+    ast = ConstantFolder(enabled=not args.no_fold).visit(ast)
 
     print("=== AST after folding ===")
     print(ast)
