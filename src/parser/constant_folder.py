@@ -1,7 +1,6 @@
 from parser.ast_nodes import (
     ASTNode,
     ProgramNode,
-    MainFunctionNode,
     VarDeclNode,
     AssignNode,
     ReturnNode,
@@ -19,6 +18,9 @@ from parser.ast_nodes import (
     IncludeNode,
     PrintfNode,
     ScanfNode,
+    FunctionDefNode,
+    FunctionDeclNode,
+    CompoundStmtNode,
 )
 
 
@@ -65,12 +67,10 @@ class ConstantFolder:
 
     def visit_ProgramNode(self, node):
         # includes have no foldable expressions — leave them alone
-        node.main_function = self.visit(node.main_function)
+        node.top_level_items = [self.visit(item) for item in node.top_level_items]
         return node
 
-    def visit_MainFunctionNode(self, node: MainFunctionNode) -> MainFunctionNode:
-        node.statements = [self.visit(stmt) for stmt in node.statements]
-        return node
+
 
     # ── Statements ────────────────────────────────────────────
 
@@ -261,4 +261,18 @@ class ConstantFolder:
 
     def visit_ScanfNode(self, node):
         node.args = [self.visit(a) for a in node.args]
+        return node
+
+    def visit_FunctionDefNode(self, node):
+        self._known.clear()
+        node.params = [self.visit(p) for p in node.params]
+        node.body = self.visit(node.body)
+        self._known.clear()
+        return node
+
+    def visit_FunctionDeclNode(self, node):
+        return node
+
+    def visit_CompoundStmtNode(self, node):
+        node.items = [self.visit(item) for item in node.items]
         return node

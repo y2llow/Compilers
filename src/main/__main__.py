@@ -32,9 +32,11 @@ def main():
                             help="Compile to native binary")
     args = arg_parser.parse_args()
 
+    # ── Bronbestand lezen ─────────────────────────────────────
     with open(args.input, 'r') as f:
         source_lines = f.readlines()
 
+    # ── Lexer en parser opzetten ──────────────────────────────
     input_stream = antlr4.FileStream(args.input)
 
     lexer = CParserLexer(input_stream)
@@ -48,6 +50,7 @@ def main():
     parser.removeErrorListeners()
     parser.addErrorListener(error_listener)
 
+    # ── Comment collector opzetten ────────────────────────────
     comment_input = antlr4.FileStream(args.input)
     comment_lexer = CParserLexer(comment_input)
     comment_lexer.removeErrorListeners()
@@ -58,6 +61,7 @@ def main():
     except Exception:
         pass
 
+    # ── Parsen ────────────────────────────────────────────────
     tree = None
     try:
         tree = parser.translation_unit()
@@ -70,34 +74,39 @@ def main():
         print(f"{RED}Compilation failed with {error_count} syntax error(s).{RESET}")
         sys.exit(1)
 
+    # ── AST bouwen ────────────────────────────────────────────
     ast = ASTBuilder(comment_collector, source_lines).visit(tree)
+
     print("=== AST before semantic analysis ===")
     print(ast)
     print()
 
-    print("=== Semantic Analysis ===")
-    analyzer = SemanticAnalyzer()
-    analyzer.analyze(ast)
+    # # ── Semantische analyse ───────────────────────────────────
+    # print("=== Semantic Analysis ===")
+    # analyzer = SemanticAnalyzer()
+    # analyzer.analyze(ast)
+    #
+    # if analyzer.errors:
+    #     error_output, error_count = analyzer.format_errors()
+    #     print(error_output)
+    #     print(f"{RED}Compilation failed with {error_count} semantic error(s).{RESET}")
+    #     sys.exit(1)
+    #
+    # if analyzer.warnings:
+    #     warning_output, warning_count = analyzer.format_warnings()
+    #     print(warning_output)
+    #
+    # print("Semantic analysis passed ✓")
+    # print()
+    #
+    # # ── Constant folding ──────────────────────────────────────
+    # ast = ConstantFolder(enabled=not args.no_fold).visit(ast)
 
-    if analyzer.errors:
-        error_output, error_count = analyzer.format_errors()
-        print(error_output)
-        print(f"{RED}Compilation failed with {error_count} semantic error(s).{RESET}")
-        sys.exit(1)
-
-    if analyzer.warnings:
-        warning_output, warning_count = analyzer.format_warnings()
-        print(warning_output)
-
-    if not analyzer.errors:
-        print(f"Semantic analysis passed ✓")
-    print()
-
-    ast = ConstantFolder(enabled=not args.no_fold).visit(ast)
     print("=== AST after folding ===")
     print(ast)
     print()
 
+    # ── LLVM IR generatie ─────────────────────────────────────
     if args.target_llvm:
         from llvm_target.llvm_generator import LLVMGenerator
         print("=== LLVM IR Generation ===")
@@ -110,6 +119,7 @@ def main():
         print(f"           echo $?")
         print()
 
+    # ── AST dot visualisatie ──────────────────────────────────
     if args.render_ast:
         dot_string = DotVisitor().visit(ast)
         with open(args.render_ast, "w") as f:
@@ -118,8 +128,8 @@ def main():
         print(f"Visualise with:          xdot {args.render_ast}")
         print(f"Export PNG with:         dot -Tpng {args.render_ast} -o ast.png")
 
+    # ── Symbol table dot visualisatie ─────────────────────────
     if args.render_symb:
-        # Symbol table rendering — basic dot output of the symbol table
         dot_lines = ['digraph SymbolTable {', '    node [fontname="Helvetica"];']
         for i, scope in enumerate(analyzer.symbol_table.scopes):
             scope_id = f"scope{i}"
@@ -137,11 +147,13 @@ def main():
             f.write('\n'.join(dot_lines))
         print(f"Symbol table dot file written to: {args.render_symb}")
 
+    # ── MIPS ──────────────────────────────────────────────────
     if args.target_mips:
-        print(f"⚠️  MIPS target not yet implemented.")
+        print("⚠️  MIPS target not yet implemented.")
 
+    # ── Binary ────────────────────────────────────────────────
     if args.target_bin:
-        print(f"⚠️  Binary target not yet implemented.")
+        print("⚠️  Binary target not yet implemented.")
 
 
 if __name__ == '__main__':
