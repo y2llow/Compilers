@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+venv/
+.venv/
+
+# IDE/editor
+.idea/
+.vscode/
+
+# Compiler/build outputs
+*.dot
+*.ll
+*.out
+a.out
+semantic_errors.txt
+test_output/
+
+# Local/generated run artifacts
+folder_structuur.txt
+repomix-output.txt
+repopack-output.txt
+symb.dot
+ast.dot
+
+# ANTLR generated metadata
+*.tokens
+*.interp
+
+# ANTLR jar, keep documented instead of committed
+antlr-*.jar
+
+# Temporary local tests
+src/antlr_files/example_source_files/temp.c
