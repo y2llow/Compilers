@@ -14,7 +14,7 @@ class SemanticAnalyzer:
     """
     Semantische analysator voor de AST.
 
-    Werkt opnieuw met de nieuwe AST-structuur:
+    Werkt met:
         ProgramNode.top_level_items
         FunctionDefNode.body
         CompoundStmtNode.items
@@ -26,7 +26,7 @@ class SemanticAnalyzer:
     - geen assignment aan const
     - basis type checking
     - pointer checks
-    - array checks
+    - array checks, inclusief 1D en 2D array access
     - printf/scanf vereisen #include <stdio.h>
     """
 
@@ -345,7 +345,7 @@ class SemanticAnalyzer:
                     self.add_error(
                         getattr(node, 'line', 0),
                         getattr(node, 'column', 0),
-                        f"Error: non-void function should return a value"
+                        "Error: non-void function should return a value"
                     )
             return
 
@@ -460,6 +460,22 @@ class SemanticAnalyzer:
     # Type helpers
     # ============================================================
 
+    def _normalize_dimensions(self, dims):
+        """
+        Zorgt ervoor dat array dimensions altijd een lijst zijn.
+        Voorbeeld:
+            3      -> [3]
+            [2, 3] -> [2, 3]
+            None   -> []
+        """
+        if dims is None:
+            return []
+
+        if isinstance(dims, int):
+            return [dims]
+
+        return list(dims)
+
     def _get_expression_type(self, node):
         if node is None:
             return None
@@ -482,7 +498,8 @@ class SemanticAnalyzer:
                 return None
 
             if symbol.array_dimensions:
-                return (symbol.type_name, symbol.pointer_depth, True)
+                dims = self._normalize_dimensions(symbol.array_dimensions)
+                return (symbol.type_name, symbol.pointer_depth, True, dims)
 
             return (symbol.type_name, symbol.pointer_depth)
 
@@ -491,6 +508,20 @@ class SemanticAnalyzer:
             if array_type is None:
                 return None
 
+            # Nieuwe array-vorm:
+            # (base_type, pointer_depth, True, remaining_dimensions)
+            if len(array_type) > 3 and array_type[2]:
+                remaining_dims = self._normalize_dimensions(array_type[3])
+
+                # matrix[1] blijft nog een array-achtige rij als er dimensies over zijn.
+                if len(remaining_dims) > 1:
+                    return (array_type[0], array_type[1], True, remaining_dims[1:])
+
+                # values[1] of matrix[1][0] is een gewone waarde.
+                return (array_type[0], array_type[1])
+
+            # Oude array-vorm:
+            # (base_type, pointer_depth, True)
             if len(array_type) > 2 and array_type[2]:
                 return (array_type[0], array_type[1])
 
@@ -577,18 +608,7 @@ class SemanticAnalyzer:
             return (symbol.type_name, symbol.pointer_depth)
 
         if isinstance(node, ArrayAccessNode):
-            array_type = self._get_expression_type(node.array)
-            if array_type is None:
-                return None
-
-            if len(array_type) > 2 and array_type[2]:
-                return (array_type[0], array_type[1])
-
-            base_type, ptr_depth = array_type[0], array_type[1]
-            if ptr_depth > 0:
-                return (base_type, ptr_depth - 1)
-
-            return None
+            return self._get_expression_type(node)
 
         if isinstance(node, DereferenceNode):
             inner_type = self._get_expression_type(node.operand)
