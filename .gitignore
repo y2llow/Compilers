@@ -35,3 +35,5 @@ antlr-*.jar
 
 # Temporary local tests
 src/antlr_files/example_source_files/temp.c
+# CI local output
+.ci_out/

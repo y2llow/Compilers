@@ -1,0 +1,331 @@
+{
+  "tests": [
+    {
+      "name": "a1_valid_basic_arithmetic",
+      "assignment": 1,
+      "file": "src/tests/ci/assignment_1_expressions/valid/01_basic_arithmetic.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a1_valid_precedence",
+      "assignment": 1,
+      "file": "src/tests/ci/assignment_1_expressions/valid/02_precedence.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a1_valid_parentheses",
+      "assignment": 1,
+      "file": "src/tests/ci/assignment_1_expressions/valid/03_parentheses.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a1_valid_comparison_logical",
+      "assignment": 1,
+      "file": "src/tests/ci/assignment_1_expressions/valid/04_comparison_logical.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a1_valid_bitwise_shift",
+      "assignment": 1,
+      "file": "src/tests/ci/assignment_1_expressions/valid/05_bitwise_shift.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a1_valid_unary",
+      "assignment": 1,
+      "file": "src/tests/ci/assignment_1_expressions/valid/06_unary.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+
+    {
+      "name": "a1_invalid_top_level_expression",
+      "assignment": 1,
+      "file": "src/tests/ci/assignment_1_expressions/invalid/01_top_level_expression.c",
+      "expect": "syntax_error",
+      "contains": ["[Syntax Error]"]
+    },
+    {
+      "name": "a1_invalid_missing_semicolon",
+      "assignment": 1,
+      "file": "src/tests/ci/assignment_1_expressions/invalid/02_missing_semicolon.c",
+      "expect": "syntax_error",
+      "contains": ["[Syntax Error]"]
+    },
+    {
+      "name": "a1_invalid_operator",
+      "assignment": 1,
+      "file": "src/tests/ci/assignment_1_expressions/invalid/03_invalid_operator.c",
+      "expect": "syntax_error",
+      "contains": ["[Syntax Error]"]
+    },
+
+    {
+      "name": "a2_valid_types_and_variables",
+      "assignment": 2,
+      "file": "src/tests/ci/assignment_2_types_variables/valid/01_types_and_variables.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a2_valid_assignment",
+      "assignment": 2,
+      "file": "src/tests/ci/assignment_2_types_variables/valid/02_assignment.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a2_valid_const_init",
+      "assignment": 2,
+      "file": "src/tests/ci/assignment_2_types_variables/valid/03_const_init.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a2_valid_pointers_basic",
+      "assignment": 2,
+      "file": "src/tests/ci/assignment_2_types_variables/valid/04_pointers_basic.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a2_valid_pointer_reassign_const_pointer_value",
+      "assignment": 2,
+      "file": "src/tests/ci/assignment_2_types_variables/valid/05_pointer_reassign_const_pointer_value.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a2_valid_explicit_cast",
+      "assignment": 2,
+      "file": "src/tests/ci/assignment_2_types_variables/valid/06_explicit_cast.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a2_valid_increment_decrement",
+      "assignment": 2,
+      "file": "src/tests/ci/assignment_2_types_variables/valid/07_increment_decrement.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+
+    {
+      "name": "a2_invalid_undeclared_variable",
+      "assignment": 2,
+      "file": "src/tests/ci/assignment_2_types_variables/invalid_semantic/01_undeclared_variable.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]", "not declared"]
+    },
+    {
+      "name": "a2_invalid_redeclaration",
+      "assignment": 2,
+      "file": "src/tests/ci/assignment_2_types_variables/invalid_semantic/02_redeclaration.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]", "already declared"]
+    },
+    {
+      "name": "a2_invalid_assign_to_const",
+      "assignment": 2,
+      "file": "src/tests/ci/assignment_2_types_variables/invalid_semantic/03_assign_to_const.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]", "cannot assign to const"]
+    },
+    {
+      "name": "a2_invalid_assign_to_literal",
+      "assignment": 2,
+      "file": "src/tests/ci/assignment_2_types_variables/invalid_semantic/04_assign_to_literal.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]", "cannot assign to literal"]
+    },
+    {
+      "name": "a2_invalid_dereference_non_pointer",
+      "assignment": 2,
+      "file": "src/tests/ci/assignment_2_types_variables/invalid_semantic/05_dereference_non_pointer.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]", "cannot dereference non-pointer"]
+    },
+    {
+      "name": "a2_invalid_address_of_literal",
+      "assignment": 2,
+      "file": "src/tests/ci/assignment_2_types_variables/invalid_semantic/06_address_of_literal.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]", "lvalue required"]
+    },
+    {
+      "name": "a2_invalid_missing_main",
+      "assignment": 2,
+      "file": "src/tests/ci/assignment_2_types_variables/invalid_semantic/07_missing_main.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]", "missing", "main"]
+    },
+    {
+      "name": "a2_invalid_bad_declaration",
+      "assignment": 2,
+      "file": "src/tests/ci/assignment_2_types_variables/invalid_syntax/02_bad_declaration.c",
+      "expect": "syntax_error",
+      "contains": ["[Syntax Error]"]
+    },
+
+    {
+      "name": "a3_valid_comments",
+      "assignment": 3,
+      "file": "src/tests/ci/assignment_3_arrays_io_llvm/valid/01_comments.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a3_valid_array_1d",
+      "assignment": 3,
+      "file": "src/tests/ci/assignment_3_arrays_io_llvm/valid/02_array_1d.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a3_valid_array_2d",
+      "assignment": 3,
+      "file": "src/tests/ci/assignment_3_arrays_io_llvm/valid/03_array_2d.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a3_valid_array_assignment",
+      "assignment": 3,
+      "file": "src/tests/ci/assignment_3_arrays_io_llvm/valid/04_array_assignment.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a3_valid_string_char_pointer",
+      "assignment": 3,
+      "file": "src/tests/ci/assignment_3_arrays_io_llvm/valid/05_string_char_pointer.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a3_valid_printf_with_stdio",
+      "assignment": 3,
+      "file": "src/tests/ci/assignment_3_arrays_io_llvm/valid/06_printf_with_stdio.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a3_valid_printf_multiple_args",
+      "assignment": 3,
+      "file": "src/tests/ci/assignment_3_arrays_io_llvm/valid/07_printf_multiple_args.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a3_valid_scanf_with_stdio",
+      "assignment": 3,
+      "file": "src/tests/ci/assignment_3_arrays_io_llvm/valid/08_scanf_with_stdio.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+
+    {
+      "name": "a3_invalid_array_initializer_wrong_size",
+      "assignment": 3,
+      "file": "src/tests/ci/assignment_3_arrays_io_llvm/invalid_semantic/01_array_initializer_wrong_size.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]", "array initializer size mismatch"]
+    },
+    {
+      "name": "a3_invalid_array_index_float",
+      "assignment": 3,
+      "file": "src/tests/ci/assignment_3_arrays_io_llvm/invalid_semantic/02_array_index_float.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]", "array subscript is not an integer"]
+    },
+    {
+      "name": "a3_invalid_array_index_pointer",
+      "assignment": 3,
+      "file": "src/tests/ci/assignment_3_arrays_io_llvm/invalid_semantic/03_array_index_pointer.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]", "array subscript is not an integer"]
+    },
+    {
+      "name": "a3_invalid_array_initializer_for_non_array",
+      "assignment": 3,
+      "file": "src/tests/ci/assignment_3_arrays_io_llvm/invalid_semantic/04_array_initializer_for_non_array.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]", "array initializer for non-array"]
+    },
+    {
+      "name": "a3_invalid_printf_without_stdio",
+      "assignment": 3,
+      "file": "src/tests/ci/assignment_3_arrays_io_llvm/invalid_semantic/05_printf_without_stdio.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]", "printf", "without #include"]
+    },
+    {
+      "name": "a3_invalid_printf_wrong_arg_count",
+      "assignment": 3,
+      "file": "src/tests/ci/assignment_3_arrays_io_llvm/invalid_semantic/06_printf_wrong_arg_count.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]", "format expects"]
+    },
+    {
+      "name": "a3_invalid_scanf_without_stdio",
+      "assignment": 3,
+      "file": "src/tests/ci/assignment_3_arrays_io_llvm/invalid_semantic/07_scanf_without_stdio.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]", "scanf", "without #include"]
+    },
+    {
+      "name": "a3_invalid_scanf_wrong_arg_count",
+      "assignment": 3,
+      "file": "src/tests/ci/assignment_3_arrays_io_llvm/invalid_semantic/08_scanf_wrong_arg_count.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]", "format expects"]
+    },
+    {
+      "name": "a3_invalid_bad_array_declaration",
+      "assignment": 3,
+      "file": "src/tests/ci/assignment_3_arrays_io_llvm/invalid_syntax/01_bad_array_declaration.c",
+      "expect": "syntax_error",
+      "contains": ["[Syntax Error]"]
+    },
+    {
+      "name": "a3_invalid_bad_printf_missing_paren",
+      "assignment": 3,
+      "file": "src/tests/ci/assignment_3_arrays_io_llvm/invalid_syntax/02_bad_printf_missing_paren.c",
+      "expect": "syntax_error",
+      "contains": ["[Syntax Error]"]
+    },
+
+    {
+      "name": "a3_runtime_return_array_value",
+      "assignment": 3,
+      "file": "src/tests/ci/assignment_3_arrays_io_llvm/runtime/01_runtime_return_array_value.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "",
+      "expected_exit_code": 3
+    },
+    {
+      "name": "a3_runtime_printf_int",
+      "assignment": 3,
+      "file": "src/tests/ci/assignment_3_arrays_io_llvm/runtime/02_runtime_printf_int.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "5",
+      "expected_exit_code": 0
+    },
+    {
+      "name": "a3_runtime_printf_expression",
+      "assignment": 3,
+      "file": "src/tests/ci/assignment_3_arrays_io_llvm/runtime/03_runtime_printf_expression.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "5",
+      "expected_exit_code": 0
+    }
+  ]
+}

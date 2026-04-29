@@ -10,7 +10,8 @@ from llvmlite import ir
 import llvmlite.binding as llvm
 from parser.ast_nodes import (
     ProgramNode,
-    MainFunctionNode,
+IncludeNode,
+FunctionDefNode,
     ReturnNode,
     IntLiteralNode,
     FloatLiteralNode,
@@ -206,48 +207,77 @@ class LLVMGenerator:
     # ═══════════════════════════════════════════════════════════
 
     def visit_ProgramNode(self, node: ProgramNode):
-        """Bezoek het programma (bevat main function)."""
-        # collect comments from includes (but don't process them)
-        for inc in node.includes:
-            self._collect_comments(inc)
-
-        self.visit(node.main_function)
-
-    def visit_MainFunctionNode(self, node: MainFunctionNode):
         """
-        Genereer de main functie.
+        Bezoek het programma.
 
-        C code:
+        Nieuwe AST-structuur:
+            ProgramNode.top_level_items
+
+        Daarin kunnen includes, defines, functies, globale variabelen, etc. zitten.
+        Voor nu genereren we LLVM voor function definitions.
+        """
+        for item in node.top_level_items:
+            if isinstance(item, IncludeNode):
+                self._collect_comments(item)
+                continue
+
+            if isinstance(item, FunctionDefNode):
+                self.visit(item)
+                continue
+
+            # Defines, typedefs, structs, enums, global vars:
+            # nog niet nodig voor assignment 1-3 LLVM.
+            continue
+
+    def visit_FunctionDefNode(self, node: FunctionDefNode):
+        """
+        Genereer LLVM voor een functie.
+
+        Voor nu ondersteunen we vooral:
             int main() { ... }
 
-        LLVM IR:
-            define i32 @main() {
-            entry:
-              ...
-            }
+        Nieuwe AST:
+            FunctionDefNode.return_type
+            FunctionDefNode.return_ptr
+            FunctionDefNode.name
+            FunctionDefNode.body.items
         """
         self._collect_comments(node)
 
-        # Definieer de main functie: int main()
-        # i32 = 32-bit integer (return type)
-        # [] = geen argumenten
-        func_type = ir.FunctionType(ir.IntType(32), [])
-        func = ir.Function(self.module, func_type, name="main")
+        # Voor assignment 1-3 verwachten we vooral int main().
+        if node.return_type == "int" and node.return_ptr == 0:
+            return_type = ir.IntType(32)
+        elif node.return_type == "float" and node.return_ptr == 0:
+            return_type = ir.FloatType()
+        elif node.return_type == "char" and node.return_ptr == 0:
+            return_type = ir.IntType(8)
+        elif node.return_type == "void" and node.return_ptr == 0:
+            return_type = ir.VoidType()
+        else:
+            return_type = self._get_llvm_type(node.return_type, node.return_ptr)
 
-        # Maak een "basic block" (een blok code zonder jumps)
+        # Parameters worden later uitgebreid.
+        # Voor nu: alleen functies zonder parameters betrouwbaar ondersteunen.
+        func_type = ir.FunctionType(return_type, [])
+        func = ir.Function(self.module, func_type, name=node.name)
+
         entry_block = func.append_basic_block(name="entry")
-
-        # Maak een builder om instructies toe te voegen
         self.builder = ir.IRBuilder(entry_block)
 
-        # Bezoek alle statements in main
-        for stmt in node.statements:
+        # Nieuwe body-structuur: CompoundStmtNode.items
+        for stmt in node.body.items:
             self.visit(stmt)
 
-        # Als de laatste statement geen return was, voeg default return 0 toe
+        # Default return als er geen expliciete return was.
         if not entry_block.is_terminated:
-            self.builder.ret(ir.Constant(ir.IntType(32), 0))
-
+            if isinstance(return_type, ir.VoidType):
+                self.builder.ret_void()
+            elif isinstance(return_type, ir.IntType):
+                self.builder.ret(ir.Constant(return_type, 0))
+            elif isinstance(return_type, ir.FloatType):
+                self.builder.ret(ir.Constant(return_type, 0.0))
+            else:
+                self.builder.ret(ir.Constant(return_type, None))
     # ═══════════════════════════════════════════════════════════
     # STATEMENTS
     # ═══════════════════════════════════════════════════════════
@@ -643,6 +673,8 @@ class LLVMGenerator:
             base_type = ir.FloatType()
         elif type_name == 'char':
             base_type = ir.IntType(8)
+        elif type_name == 'void':
+            base_type = ir.VoidType()
         else:
             raise ValueError(f"Onbekend type: {type_name}")
 
