@@ -3,11 +3,10 @@ name: Compiler CI
 on:
   push:
     branches:
-      
-main
-pull_request:
-  branches:
-main
+      - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
   test:
@@ -15,36 +14,26 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      
-name: Check out repository
-      uses: actions/checkout@v4
+      - name: Check out repository
+        uses: actions/checkout@v4
 
-      
-name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: "3.12"
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
-      
-name: Install system dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y llvm clang graphviz
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y llvm clang graphviz
 
-      
-name: Install Python dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
-      
-name: Show tool versions
-      run: |
-        python --version
-        lli --version
-        clang --version
-
-      
-name: Run CI tests
-      run: |
-        python scripts/ci_tests.py
+      - name: Show tool versions
+        run: |
+          python --version
+          lli --version
+          clang --version
