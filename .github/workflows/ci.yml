@@ -37,3 +37,7 @@ jobs:
           python --version
           lli --version
           clang --version
+
+      - name: Run CI tests
+        run: |
+          python scripts/ci_tests.py
