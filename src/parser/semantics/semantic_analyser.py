@@ -36,6 +36,8 @@ class SemanticAnalyzer:
         self.warnings = []
         self.stdio_included = False
         self.current_function_return_type = None
+        self.loop_depth = 0
+        self.switch_depth = 0
 
     # ============================================================
     # Error / warning helpers
@@ -242,7 +244,10 @@ class SemanticAnalyzer:
 
     def visit_WhileNode(self, node):
         self._check_expression(node.condition)
+
+        self.loop_depth += 1
         self.visit(node.body)
+        self.loop_depth -= 1
 
     def visit_ForNode(self, node):
         self.symbol_table.push_scope()
@@ -253,27 +258,44 @@ class SemanticAnalyzer:
         if node.condition is not None:
             self._check_expression(node.condition)
 
+        self.loop_depth += 1
+
         if node.update is not None:
             self.visit(node.update)
 
         self.visit(node.body)
 
+        self.loop_depth -= 1
         self.symbol_table.pop_scope()
 
     def visit_BreakNode(self, node):
-        pass
+        if self.loop_depth == 0 and self.switch_depth == 0:
+            self.add_error(
+                getattr(node, 'line', 0),
+                getattr(node, 'column', 0),
+                "Error: 'break' statement not within loop or switch"
+            )
 
     def visit_ContinueNode(self, node):
-        pass
+        if self.loop_depth == 0:
+            self.add_error(
+                getattr(node, 'line', 0),
+                getattr(node, 'column', 0),
+                "Error: 'continue' statement not within loop"
+            )
 
     def visit_SwitchNode(self, node):
         self._check_expression(node.expression)
+
+        self.switch_depth += 1
 
         for case in node.cases:
             self.visit(case)
 
         if node.default is not None:
             self.visit(node.default)
+
+        self.switch_depth -= 1
 
     def visit_SwitchCaseNode(self, node):
         self._check_expression(node.value)

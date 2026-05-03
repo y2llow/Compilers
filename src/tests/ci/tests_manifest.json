@@ -326,6 +326,55 @@
       "contains": ["Semantic analysis passed"],
       "expected_stdout": "5",
       "expected_exit_code": 0
+    },
+    {
+      "name": "a4_valid_if_else_basic",
+      "assignment": 4,
+      "file": "src/tests/ci/assignment_4_control_flow/valid/01_if_else_basic.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a4_valid_while_loop_increment",
+      "assignment": 4,
+      "file": "src/tests/ci/assignment_4_control_flow/valid/02_while_loop_increment.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a4_valid_for_loop_with_break",
+      "assignment": 4,
+      "file": "src/tests/ci/assignment_4_control_flow/valid/03_for_loop_with_break.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a4_valid_enum_switch_case_default",
+      "assignment": 4,
+      "file": "src/tests/ci/assignment_4_control_flow/valid/04_enum_switch_case_default.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a4_invalid_break_outside_loop",
+      "assignment": 4,
+      "file": "src/tests/ci/assignment_4_control_flow/invalid_semantic/01_break_outside_loop.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]", "break"]
+    },
+    {
+      "name": "a4_invalid_continue_outside_loop",
+      "assignment": 4,
+      "file": "src/tests/ci/assignment_4_control_flow/invalid_semantic/02_continue_outside_loop.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]", "continue"]
+    },
+    {
+      "name": "a4_invalid_block_scope_variable_not_visible",
+      "assignment": 4,
+      "file": "src/tests/ci/assignment_4_control_flow/invalid_semantic/03_block_scope_variable_not_visible.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]", "not declared"]
     }
   ]
 }
