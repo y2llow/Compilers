@@ -64,6 +64,57 @@
       "expect": "syntax_error",
       "contains": ["[Syntax Error]"]
     },
+    {
+      "name": "a1_runtime_nested_precedence",
+      "assignment": 1,
+      "file": "src/tests/ci/assignment_1_expressions/valid/07_nested_precedence.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "",
+      "expected_exit_code": 10
+    },
+    {
+      "name": "a1_runtime_logical_comparison_mix",
+      "assignment": 1,
+      "file": "src/tests/ci/assignment_1_expressions/valid/08_logical_comparison_mix.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "",
+      "expected_exit_code": 1
+    },
+    {
+      "name": "a1_runtime_bitwise_combination",
+      "assignment": 1,
+      "file": "src/tests/ci/assignment_1_expressions/valid/09_bitwise_combination.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "",
+      "expected_exit_code": 10
+    },
+    {
+      "name": "a1_runtime_unary_logical_not",
+      "assignment": 1,
+      "file": "src/tests/ci/assignment_1_expressions/valid/10_unary_logical_not.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "",
+      "expected_exit_code": 1
+    },
+    {
+      "name": "a1_invalid_missing_closing_parenthesis",
+      "assignment": 1,
+      "file": "src/tests/ci/assignment_1_expressions/invalid/04_missing_closing_parenthesis.c",
+      "expect": "syntax_error",
+      "contains": ["[Syntax Error]"]
+    },
+    {
+      "name": "a1_invalid_broken_expression_operator",
+      "assignment": 1,
+      "file": "src/tests/ci/assignment_1_expressions/invalid/05_broken_expression_operator.c",
+      "expect": "syntax_error",
+      "contains": ["[Syntax Error]"]
+    },
+
 
     {
       "name": "a2_valid_types_and_variables",
@@ -171,7 +222,15 @@
       "expect": "syntax_error",
       "contains": ["[Syntax Error]"]
     },
-
+    {
+      "name": "a2_runtime_constant_propagation_return_variable",
+      "assignment": 2,
+      "file": "src/tests/ci/assignment_2_types_variables/runtime/01_constant_propagation_return_variable.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "",
+      "expected_exit_code": 5
+    },
     {
       "name": "a3_valid_comments",
       "assignment": 3,

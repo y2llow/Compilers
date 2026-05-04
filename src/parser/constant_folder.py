@@ -55,6 +55,7 @@ class ConstantFolder:
     def __init__(self, enabled: bool = True):
         self.enabled = enabled
         self._known: dict[str, ASTNode] = {}
+        self._propagation_enabled = True
 
     # ------------------------------------------------------------
     # Dispatch
@@ -73,6 +74,27 @@ class ConstantFolder:
 
     def generic_visit(self, node: ASTNode) -> ASTNode:
         return node
+
+    def _visit_without_propagation(self, node):
+        """
+        Bezoek een node zonder identifier constant propagation.
+
+        Dit is belangrijk in loops:
+            int i = 1;
+            while (i <= 5) { i++; }
+
+        Als we i in de conditie vervangen door 1, wordt de loop:
+            while (1 <= 5)
+
+        en dan krijg je een infinite loop in LLVM.
+        """
+        old_flag = self._propagation_enabled
+        self._propagation_enabled = False
+
+        result = self.visit(node)
+
+        self._propagation_enabled = old_flag
+        return result
 
     # ------------------------------------------------------------
     # Program / functions / blocks
@@ -113,8 +135,6 @@ class ConstantFolder:
 
     def visit_IfNode(self, node: IfNode) -> IfNode:
         node.condition = self.visit(node.condition)
-
-        # Branches zijn onzeker: na een if weten we niet zeker welke branch uitgevoerd werd.
         old_known = self._known.copy()
 
         self._known = old_known.copy()
@@ -128,31 +148,24 @@ class ConstantFolder:
         return node
 
     def visit_WhileNode(self, node: WhileNode) -> WhileNode:
-        node.condition = self.visit(node.condition)
-
-        # Een loop kan 0, 1 of veel keer uitvoeren.
-        # Daarom laten we bekende waarden niet uit de loop lekken.
-        old_known = self._known.copy()
-        node.body = self.visit(node.body)
-        self._known = old_known
+        node.condition = self._visit_without_propagation(node.condition)
+        node.body = self._visit_without_propagation(node.body)
+        self._known.clear()
 
         return node
 
     def visit_ForNode(self, node: ForNode) -> ForNode:
-        old_known = self._known.copy()
-
         if node.init is not None:
             node.init = self.visit(node.init)
-
         if node.condition is not None:
-            node.condition = self.visit(node.condition)
+            node.condition = self._visit_without_propagation(node.condition)
 
         if node.update is not None:
-            node.update = self.visit(node.update)
+            node.update = self._visit_without_propagation(node.update)
 
-        node.body = self.visit(node.body)
+        node.body = self._visit_without_propagation(node.body)
+        self._known.clear()
 
-        self._known = old_known
         return node
 
     def visit_BreakNode(self, node: BreakNode) -> BreakNode:
@@ -259,8 +272,9 @@ class ConstantFolder:
     # ------------------------------------------------------------
 
     def visit_IdentifierNode(self, node: IdentifierNode) -> ASTNode:
+        if self._propagation_enabled and node.name in self._known:
+            return self._known[node.name]
         return node
-
     # ------------------------------------------------------------
     # Expressions
     # ------------------------------------------------------------
