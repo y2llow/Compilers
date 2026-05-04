@@ -174,7 +174,7 @@ class SemanticAnalyzer:
         if name in self.functions:
             existing = self.functions[name]
 
-            # Check of de signature matcht met eerdere declaration
+            # Check of de signature matcht met eerdere declaration/definition
             if (existing['return_type'] != node.return_type or
                 existing['return_ptr'] != node.return_ptr or
                 len(existing['params']) != len(node.params)):
@@ -183,33 +183,23 @@ class SemanticAnalyzer:
                     getattr(node, 'column', 0),
                     f"Error: conflicting function definition for '{name}' (previously declared at line {existing['line']})"
                 )
+                return
 
-            # Check op duplicate definition
+            # Check op duplicate definition (twee definitions, niet declaration + definition)
             if existing['defined']:
                 self.add_error(
                     getattr(node, 'line', 0),
                     getattr(node, 'column', 0),
                     f"Error: function '{name}' already defined at line {existing['line']}"
                 )
-            else:
-                # Update de entry: zet defined=True
-                self.functions[name]['defined'] = True
+                return
+
+            # Update de entry: zet defined=True (declaration -> definition is valide)
+            self.functions[name]['defined'] = True
         else:
             # Eerste keer: voeg toe
             self.functions[name] = func_info
 
-    def visit_IncludeNode(self, node):
-        if node.header == 'stdio.h':
-            self.stdio_included = True
-
-    def visit_DefineNode(self, node):
-        pass
-
-    def visit_TypedefNode(self, node):
-        pass
-
-    def visit_StructDeclNode(self, node):
-        pass
 
     def visit_EnumDeclNode(self, node):
         """
