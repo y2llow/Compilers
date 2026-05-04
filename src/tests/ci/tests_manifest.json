@@ -375,6 +375,42 @@
       "file": "src/tests/ci/assignment_4_control_flow/invalid_semantic/03_block_scope_variable_not_visible.c",
       "expect": "semantic_error",
       "contains": ["[Semantic Error]", "not declared"]
+    },
+    {
+      "name": "a4_runtime_if_simple",
+      "assignment": 4,
+      "file": "src/tests/ci/assignment_4_control_flow/runtime/01_if_simple.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "",
+      "expected_exit_code": 42
+    },
+    {
+      "name": "a4_runtime_while_sum",
+      "assignment": 4,
+      "file": "src/tests/ci/assignment_4_control_flow/runtime/02_while_sum.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "",
+      "expected_exit_code": 15
+    },
+    {
+      "name": "a4_runtime_for_factorial",
+      "assignment": 4,
+      "file": "src/tests/ci/assignment_4_control_flow/runtime/03_for_factorial.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "",
+      "expected_exit_code": 120
+    },
+    {
+      "name": "a4_runtime_ternary_operator",
+      "assignment": 4,
+      "file": "src/tests/ci/assignment_4_control_flow/runtime/04_ternary_operator.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "",
+      "expected_exit_code": 100
     }
   ]
 }

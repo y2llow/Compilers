@@ -28,6 +28,16 @@ FunctionDefNode,
     ArrayAccessNode,
     ArrayInitializerNode,
     CharLiteralNode,
+    IfNode,
+    WhileNode,
+    ForNode,
+    BreakNode,
+    ContinueNode,
+    SwitchNode,
+    TernaryOpNode,
+    SwitchCaseNode,
+    SwitchDefaultNode,
+    CompoundStmtNode,
 )
 
 
@@ -60,6 +70,8 @@ class LLVMGenerator:
         self.comment_order = []  # Track order of statements
 
         self.string_counter = 0
+
+        self.loop_stack = []
 
         self.printf_func = None
         self.scanf_func = None
@@ -447,6 +459,268 @@ class LLVMGenerator:
 
         else:
             raise NotImplementedError("Assignment naar dit type nog niet ondersteund")
+
+    def visit_IfNode(self, node: IfNode):
+        """
+        Genereer LLVM voor if statement.
+
+        C code:
+            if (x > 0) { y = 1; } else { y = 2; }
+
+        LLVM IR:
+            br i1 %cond, label %then, label %else
+            then:
+                ...
+                br label %end
+            else:
+                ...
+                br label %end
+            end:
+        """
+        self._collect_comments(node)
+
+        # Evalueer conditie
+        cond = self.visit(node.condition)
+
+        # Zet conditie om naar i1 (boolean)
+        cond_bool = self.builder.icmp_signed('!=', cond, ir.Constant(ir.IntType(32), 0))
+
+        # Maak basic blocks aan
+        then_block = self.builder.block.parent.append_basic_block(name="if.then")
+        else_block = self.builder.block.parent.append_basic_block(name="if.else")
+        end_block = self.builder.block.parent.append_basic_block(name="if.end")
+
+        # Jump naar then of else
+        self.builder.cbranch(cond_bool, then_block, else_block)
+
+        # Then branch
+        self.builder.position_at_end(then_block)
+        self._visit_block_items(node.then_body.items)
+        if not then_block.is_terminated:
+            self.builder.branch(end_block)
+
+        # Else branch
+        self.builder.position_at_end(else_block)
+        if node.else_body is not None:
+            self._visit_block_items(node.else_body.items)
+        if not else_block.is_terminated:
+            self.builder.branch(end_block)
+
+        # End block
+        self.builder.position_at_end(end_block)
+
+    def _visit_block_items(self, items):
+        """Helper: bezoek alle items in een blok"""
+        for item in items:
+            self.visit(item)
+
+    def visit_WhileNode(self, node: WhileNode):
+        """While loop met break/continue support."""
+        self._collect_comments(node)
+
+        cond_block = self.builder.block.parent.append_basic_block(name="while.cond")
+        body_block = self.builder.block.parent.append_basic_block(name="while.body")
+        end_block = self.builder.block.parent.append_basic_block(name="while.end")
+
+        self.builder.branch(cond_block)
+
+        # Push naar stack VOOR body
+        self.loop_stack.append((body_block, cond_block, end_block))
+
+        self.builder.position_at_end(cond_block)
+        cond = self.visit(node.condition)
+        cond_bool = self.builder.icmp_signed('!=', cond, ir.Constant(ir.IntType(32), 0))
+        self.builder.cbranch(cond_bool, body_block, end_block)
+
+        self.builder.position_at_end(body_block)
+        self._visit_block_items(node.body.items)
+        if not body_block.is_terminated:
+            self.builder.branch(cond_block)
+
+        # Pop van loop stack
+        self.loop_stack.pop()
+
+        # End block
+        self.builder.position_at_end(end_block)
+
+    def visit_ForNode(self, node: ForNode):
+        """For loop met break/continue support."""
+        self._collect_comments(node)
+
+        if node.init is not None:
+            self.visit(node.init)
+
+        cond_block = self.builder.block.parent.append_basic_block(name="for.cond")
+        body_block = self.builder.block.parent.append_basic_block(name="for.body")
+        update_block = self.builder.block.parent.append_basic_block(name="for.update")
+        end_block = self.builder.block.parent.append_basic_block(name="for.end")
+
+        self.builder.branch(cond_block)
+
+        # Push naar stack VOOR body
+        self.loop_stack.append((body_block, update_block, end_block))
+
+        self.builder.position_at_end(cond_block)
+        if node.condition is not None:
+            cond = self.visit(node.condition)
+            cond_bool = self.builder.icmp_signed('!=', cond, ir.Constant(ir.IntType(32), 0))
+            self.builder.cbranch(cond_bool, body_block, end_block)
+        else:
+            self.builder.branch(body_block)
+
+        self.builder.position_at_end(body_block)
+        self._visit_block_items(node.body.items)
+        if not body_block.is_terminated:
+            self.builder.branch(update_block)
+
+        self.builder.position_at_end(update_block)
+        if node.update is not None:
+            self.visit(node.update)
+        self.builder.branch(cond_block)
+
+        # Pop van stack NA body
+        self.loop_stack.pop()
+
+        self.builder.position_at_end(end_block)
+
+    def visit_BreakNode(self, node: BreakNode):
+        """
+        Break statement - jump naar end van loop.
+        """
+        self._collect_comments(node)
+
+        if self.loop_stack:
+            _, _, end_block = self.loop_stack[-1]
+            self.builder.branch(end_block)
+        else:
+            raise RuntimeError("Break outside loop")
+
+    def visit_ContinueNode(self, node: ContinueNode):
+        """
+        Continue statement - jump naar update (for) of cond (while).
+        """
+        self._collect_comments(node)
+
+        if self.loop_stack:
+            _, update_or_cond_block, _ = self.loop_stack[-1]
+            self.builder.branch(update_or_cond_block)
+        else:
+            raise RuntimeError("Continue outside loop")
+
+    def visit_SwitchNode(self, node: SwitchNode):
+        """
+        Switch statement met cases.
+
+        C code:
+            switch (x) {
+                case 1: ...
+                case 2: ...
+                default: ...
+            }
+        """
+        self._collect_comments(node)
+
+        # Evalueer expression
+        expr_val = self.visit(node.expression)
+
+        # Maak end block aan
+        end_block = self.builder.block.parent.append_basic_block(name="switch.end")
+
+        # Push naar loop stack zodat break werkt
+        self.loop_stack.append((None, None, end_block))
+
+        # Maak blocks voor elke case
+        case_blocks = []
+        for case in node.cases:
+            case_block = self.builder.block.parent.append_basic_block(name="case")
+            case_blocks.append(case_block)
+
+        default_block = None
+        if node.default is not None:
+            default_block = self.builder.block.parent.append_basic_block(name="default")
+        else:
+            default_block = end_block
+
+        # Switch instruction
+        switch_instr = self.builder.switch(expr_val, default_block)
+
+        # Voeg cases toe aan switch
+        for i, case in enumerate(node.cases):
+            case_value = self.visit(case.value)
+            # Extract de integer waarde
+            if isinstance(case_value, ir.Constant):
+                case_int = case_value.constant
+            else:
+                case_int = 0
+            switch_instr.add_case(ir.Constant(ir.IntType(32), case_int), case_blocks[i])
+
+        # Generate code voor elke case
+        for i, case in enumerate(node.cases):
+            self.builder.position_at_end(case_blocks[i])
+            self._visit_block_items(case.items)
+            if not case_blocks[i].is_terminated:
+                self.builder.branch(end_block)
+
+        # Default block
+        if node.default is not None:
+            self.builder.position_at_end(default_block)
+            self._visit_block_items(node.default.items)
+            if not default_block.is_terminated:
+                self.builder.branch(end_block)
+
+        # Pop van loop stack
+        self.loop_stack.pop()
+
+        # End block
+        self.builder.position_at_end(end_block)
+
+    def visit_TernaryOpNode(self, node: TernaryOpNode):
+        """
+        Ternary operator: cond ? then_expr : else_expr
+
+        C code:
+            x > 0 ? 1 : 2
+
+        LLVM IR:
+            %cond = icmp ...
+            br i1 %cond, label %then, label %else
+            then:
+                %then_val = ...
+                br label %end
+            else:
+                %else_val = ...
+                br label %end
+            end:
+                %result = phi i32 [%then_val, %then], [%else_val, %else]
+        """
+        cond = self.visit(node.condition)
+        cond_bool = self.builder.icmp_signed('!=', cond, ir.Constant(ir.IntType(32), 0))
+
+        then_block = self.builder.block.parent.append_basic_block(name="ternary.then")
+        else_block = self.builder.block.parent.append_basic_block(name="ternary.else")
+        end_block = self.builder.block.parent.append_basic_block(name="ternary.end")
+
+        self.builder.cbranch(cond_bool, then_block, else_block)
+
+        # Then
+        self.builder.position_at_end(then_block)
+        then_val = self.visit(node.then_expr)
+        self.builder.branch(end_block)
+        then_block = self.builder.block
+
+        # Else
+        self.builder.position_at_end(else_block)
+        else_val = self.visit(node.else_expr)
+        self.builder.branch(end_block)
+        else_block = self.builder.block
+
+        # End - phi node
+        self.builder.position_at_end(end_block)
+        phi = self.builder.phi(then_val.type)
+        phi.add_incoming(then_val, then_block)
+        phi.add_incoming(else_val, else_block)
+
+        return phi
 
     # ═══════════════════════════════════════════════════════════
     # EXPRESSIONS

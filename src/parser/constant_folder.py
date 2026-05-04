@@ -259,8 +259,6 @@ class ConstantFolder:
     # ------------------------------------------------------------
 
     def visit_IdentifierNode(self, node: IdentifierNode) -> ASTNode:
-        if node.name in self._known:
-            return self._known[node.name]
         return node
 
     # ------------------------------------------------------------
