@@ -19,7 +19,7 @@ top_level_item
     | var_decl ';'
     ;
 
-// ── Preprocessor ─────────────────────────────────────────────
+// ── Preprocessor ──────────────────────────────────────────────
 
 include_directive
     : HASH INCLUDE (LT_STDIO_H | STRING_LIT)
@@ -105,6 +105,7 @@ parameter_list
     | VOID
     ;
 
+// array_dimension* allows  int arr[]  and  int arr[5]  as parameters
 parameter
     : CONST? type_spec CONST? '*'* IDENTIFIER array_dimension*
     ;
@@ -217,8 +218,9 @@ var_decl
     : CONST? type_spec CONST? '*'* IDENTIFIER array_dimension* ('=' var_initializer)?
     ;
 
+// INTEGER is optional: supports arr[5] (known size) and arr[] (unknown size)
 array_dimension
-    : '[' INTEGER ']'
+    : '[' INTEGER? ']'
     ;
 
 var_initializer
@@ -245,12 +247,12 @@ type_spec
     : INT
     | FLOAT_KW
     | CHAR_KW
-    | IDENTIFIER        // for typedef'd types and enum/struct names
+    | IDENTIFIER
     | enum_specifier
     | struct_specifier
     ;
 
-// ── Assignment ───────────────────────────────────────────────
+// ── Assignment ────────────────────────────────────────────────
 
 assignment
     : unary_expr assign_op expression
@@ -368,18 +370,18 @@ PRINTF   : 'printf' ;
 SCANF    : 'scanf' ;
 
 // Preprocessor
-HASH          : '#' ;
-INCLUDE       : 'include' ;
-DEFINE        : 'define' ;
-LT_STDIO_H    : '<stdio.h>' ;
+HASH       : '#' ;
+INCLUDE    : 'include' ;
+DEFINE     : 'define' ;
+LT_STDIO_H : '<stdio.h>' ;
 
-// Literals (float before int!)
+// Literals (float before int to avoid ambiguity)
 FLOAT_LIT  : [0-9]+ '.' [0-9]* | '.' [0-9]+ ;
 INTEGER    : [0-9]+ ;
 STRING_LIT : '"' ( '\\' . | ~["\\\r\n] )* '"' ;
 CHAR_LIT   : '\'' ( '\\' . | ~['\\\r\n] ) '\'' ;
 
-// Identifier (after all keywords!)
+// Identifier (after all keywords)
 IDENTIFIER : [a-zA-Z_][a-zA-Z_0-9]* ;
 
 // Whitespace and comments
