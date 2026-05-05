@@ -528,6 +528,27 @@
       "contains": ["Semantic analysis passed"]
     },
     {
+      "name": "a5_valid_string_define",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/valid/05_string_define.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a5_valid_nested_define",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/valid/06_nested_define.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a5_valid_bool_define",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/valid/07_bool_alias.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
       "name": "a5_invalid_conflicting_decl_definition",
       "assignment": 5,
       "file": "src/tests/ci/assignment_5_functions/invalid_semantic/05_conflicting_declaration_definition.c",
