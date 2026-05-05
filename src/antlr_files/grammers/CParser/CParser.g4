@@ -140,15 +140,20 @@ statement
     ;
 
 if_statement
-    : IF '(' expression ')' compound_statement (ELSE compound_statement)?
+    : IF '(' expression ')' control_body (ELSE control_body)?
     ;
 
 while_statement
-    : WHILE '(' expression ')' compound_statement
+    : WHILE '(' expression ')' control_body
     ;
 
 for_statement
-    : FOR '(' for_init ';' expression? ';' for_update? ')' compound_statement
+    : FOR '(' for_init ';' expression? ';' for_update? ')' control_body
+    ;
+
+control_body
+    : compound_statement
+    | statement
     ;
 
 for_init

@@ -224,6 +224,15 @@ class CParserListener(ParseTreeListener):
         pass
 
 
+    # Enter a parse tree produced by CParserParser#control_body.
+    def enterControl_body(self, ctx:CParserParser.Control_bodyContext):
+        pass
+
+    # Exit a parse tree produced by CParserParser#control_body.
+    def exitControl_body(self, ctx:CParserParser.Control_bodyContext):
+        pass
+
+
     # Enter a parse tree produced by CParserParser#for_init.
     def enterFor_init(self, ctx:CParserParser.For_initContext):
         pass

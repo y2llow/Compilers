@@ -414,6 +414,13 @@ class ASTBuilder(CParserVisitor):
         node = CompoundStmtNode(items)
         return self._attach_position(node, ctx)
 
+    def _as_compound_body(self, node):
+        if isinstance(node, CompoundStmtNode):
+            return node
+        if node is None:
+            return CompoundStmtNode([])
+        return CompoundStmtNode([node])
+
     def visitBlock_item(self, ctx):
         """
         block_item: statement | var_decl ';'
@@ -446,14 +453,18 @@ class ASTBuilder(CParserVisitor):
         Voorbeeld: if (x > 0) { ... } else { ... }
         """
         condition = self.visit(ctx.expression())
-        then_body = self.visit(ctx.compound_statement(0))
+
+        then_body = self._as_compound_body(self.visit(ctx.control_body(0)))
 
         else_body = None
-        if len(ctx.compound_statement()) > 1:
-            else_body = self.visit(ctx.compound_statement(1))
+        if len(ctx.control_body()) > 1:
+            else_body = self._as_compound_body(self.visit(ctx.control_body(1)))
 
         node = IfNode(condition, then_body, else_body)
         return self._attach_position(node, ctx)
+
+    def visitControl_body(self, ctx):
+        return self.visit(ctx.getChild(0))
 
     def visitWhile_statement(self, ctx):
         """
@@ -462,35 +473,25 @@ class ASTBuilder(CParserVisitor):
         Voorbeeld: while (x < 10) { ... }
         """
         condition = self.visit(ctx.expression())
-        body = self.visit(ctx.compound_statement())
+        body = self._as_compound_body(self.visit(ctx.control_body()))
 
         node = WhileNode(condition, body)
         return self._attach_position(node, ctx)
 
     def visitFor_statement(self, ctx):
-        """
-        for_statement:
-            FOR '(' for_init ';' expression? ';' for_update? ')'
-            compound_statement
-
-        Voorbeeld: for (int i = 0; i < 10; i++) { ... }
-        """
-        # Init (mag leeg zijn)
         init = None
         if ctx.for_init():
             init = self.visit(ctx.for_init())
 
-        # Conditie (mag leeg zijn → oneindige lus)
         condition = None
         if ctx.expression():
             condition = self.visit(ctx.expression())
 
-        # Update (mag leeg zijn)
         update = None
         if ctx.for_update():
             update = self.visit(ctx.for_update())
 
-        body = self.visit(ctx.compound_statement())
+        body = self._as_compound_body(self.visit(ctx.control_body()))
 
         node = ForNode(init, condition, update, body)
         return self._attach_position(node, ctx)
