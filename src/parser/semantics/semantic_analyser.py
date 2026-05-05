@@ -744,6 +744,20 @@ class SemanticAnalyzer:
 
         return None
 
+    def _function_signature(self, node):
+        params = []
+        for p in node.params:
+            params.append((p.type_name, p.pointer_depth))
+
+        return {
+            "return_type": node.return_type,
+            "return_ptr": node.return_ptr,
+            "params": params,
+            "line": getattr(node, "line", 0),
+            "column": getattr(node, "column", 0),
+            "defined": isinstance(node, FunctionDefNode),
+        }
+
     # ============================================================
     # Expression checks
     # ============================================================

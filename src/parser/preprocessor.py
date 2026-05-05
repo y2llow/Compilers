@@ -319,6 +319,14 @@ class Preprocessor:
 
     def visit_FunctionCallNode(self, node: FunctionCallNode) -> FunctionCallNode:
         node.args = [self.visit(arg) for arg in node.args]
+
+        if node.name == "printf" and node.args:
+            fmt = node.args[0]
+            rest = node.args[1:]
+
+            if isinstance(fmt, StringLiteralNode):
+                return PrintfNode(fmt.value, rest)
+
         return node
 
     def visit_MemberAccessNode(self, node: MemberAccessNode) -> MemberAccessNode:
