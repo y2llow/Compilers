@@ -1,3 +1,5 @@
+#include <stdio.h>
+
 void increment(int* ptr) {
     *ptr = *ptr + 1;
 }

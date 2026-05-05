@@ -1,3 +1,5 @@
+#include <stdio.h>
+
 int multiply(int a, int b);  // Forward declaration
 
 int main() {

@@ -1,3 +1,5 @@
+#include <stdio.h>
+
 int sum_array(int arr[], int size) {
     int total = 0;
     int i = 0;
