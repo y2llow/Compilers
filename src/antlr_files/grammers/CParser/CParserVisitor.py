@@ -129,6 +129,11 @@ class CParserVisitor(ParseTreeVisitor):
         return self.visitChildren(ctx)
 
 
+    # Visit a parse tree produced by CParserParser#control_body.
+    def visitControl_body(self, ctx:CParserParser.Control_bodyContext):
+        return self.visitChildren(ctx)
+
+
     # Visit a parse tree produced by CParserParser#for_init.
     def visitFor_init(self, ctx:CParserParser.For_initContext):
         return self.visitChildren(ctx)
