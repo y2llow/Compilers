@@ -270,14 +270,42 @@ class SemanticAnalyzer:
     # ============================================================
 
     def visit_FunctionDeclNode(self, node):
-        # Declarations zijn al verwerkt in visit_ProgramNode.
-        pass
+        # Validate return type
+        self._validate_type_name(node.return_type, node)
 
+        # Validate parameter types
+        for param in node.params:
+            self._validate_type_name(param.type_name, param)
+
+        # Declarations are registered in visit_ProgramNode, not here
+        # So we just validate types but don't need to do anything else
+
+    def _validate_type_name(self, type_name, node):
+        """Validate that a type name is known."""
+        valid_builtin_types = {'int', 'float', 'char', 'void'}
+
+        if type_name in valid_builtin_types:
+            return True
+
+        self.add_error(
+            getattr(node, 'line', 0),
+            getattr(node, 'column', 0),
+            f"Error: unknown type name '{type_name}'"
+        )
+        return False
+    
     def visit_FunctionDefNode(self, node):
         # Belangrijk:
         # NIET opnieuw registreren/checken hier.
         # Dat gebeurt al in visit_ProgramNode via _register_function_definition.
         # Anders krijg je foutief "redefinition of function main".
+
+        # Validate return type
+        self._validate_type_name(node.return_type, node)
+
+        # Validate parameter types
+        for param in node.params:
+            self._validate_type_name(param.type_name, param)
 
         old_return_type = self.current_function_return_type
         self.current_function_return_type = (node.return_type, node.return_ptr)
@@ -450,6 +478,10 @@ class SemanticAnalyzer:
     # ============================================================
 
     def visit_VarDeclNode(self, node):
+
+        # Validate type is known
+        self._validate_type_name(node.type_name, node)
+
         success, existing = self.symbol_table.add_symbol(
             node.name,
             node.type_name,
