@@ -350,7 +350,7 @@ def main():
     parser.add_argument(
         "--assignment",
         type=int,
-        choices=[1, 2, 3, 4],
+        choices=[1, 2, 3, 4,5],
         help="Only run tests for one assignment.",
     )
     parser.add_argument(

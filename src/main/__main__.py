@@ -12,6 +12,7 @@ from parser.dot_visitor import DotVisitor
 from parser.error_handler import SyntaxErrorListener, RED, RESET
 from parser.semantics.semantic_analyser import SemanticAnalyzer
 from parser.comment_collector import CommentCollector
+from parser.preprocessor import Preprocessor
 
 
 def main():
@@ -77,7 +78,14 @@ def main():
     # ── AST bouwen ────────────────────────────────────────────
     ast = ASTBuilder(comment_collector, source_lines).visit(tree)
 
-    print("=== AST before semantic analysis ===")
+    print("=== AST before preprocessing ===")
+    print(ast)
+    print()
+
+    # ── Preprocessor ───────────────────────────────────
+    ast = Preprocessor().preprocess(ast)
+
+    print("=== AST after preprocessing ===")
     print(ast)
     print()
 
