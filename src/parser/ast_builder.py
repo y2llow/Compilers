@@ -577,13 +577,21 @@ class ASTBuilder(CParserVisitor):
 
     def visitPrintf_statement(self, ctx):
         """
-        printf_statement: PRINTF '(' STRING_LIT (',' printf_arg)* ')'
+        printf_statement: PRINTF '(' expression (',' printf_arg)* ')'
+        Eerste argument kan nu STRING_LIT of een macro identifier zijn.
         """
-        raw = ctx.STRING_LIT().getText()
-        format_string = _unescape(raw[1:-1])
+        fmt_expr = self.visit(ctx.expression())
+
         args = [self.visit(a) for a in ctx.printf_arg()]
 
-        node = PrintfNode(format_string, args)
+        if isinstance(fmt_expr, StringLiteralNode):
+            node = PrintfNode(fmt_expr.value, args)
+        elif isinstance(fmt_expr, IdentifierNode):
+            # Wordt later door de Preprocessor opgelost.
+            node = FunctionCallNode("printf", [fmt_expr] + args)
+        else:
+            node = FunctionCallNode("printf", [fmt_expr] + args)
+
         return self._attach_position(node, ctx)
 
     def visitPrintf_arg(self, ctx):

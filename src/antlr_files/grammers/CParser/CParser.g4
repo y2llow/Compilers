@@ -35,6 +35,10 @@ define_value
     | CHAR_LIT
     | STRING_LIT
     | IDENTIFIER
+    | INT
+    | FLOAT_KW
+    | CHAR_KW
+    | VOID
     ;
 
 // ── Typedef ───────────────────────────────────────────────────
@@ -187,7 +191,7 @@ continue_statement
 // ── printf / scanf ────────────────────────────────────────────
 
 printf_statement
-    : PRINTF '(' STRING_LIT (',' printf_arg)* ')'
+    : PRINTF '(' expression (',' printf_arg)* ')'
     ;
 
 printf_arg
