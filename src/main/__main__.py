@@ -21,6 +21,12 @@ def main():
                             help="Path to the C source file")
     arg_parser.add_argument("--no-fold", action="store_true",
                             help="Disable constant folding")
+    arg_parser.add_argument("--no-dce", action="store_true",
+                            help="Disable dead code elimination")
+    arg_parser.add_argument("--no-dce-unused-vars", action="store_true",
+                            help="Disable unused-variable elimination (part of DCE)")
+    arg_parser.add_argument("--no-dce-dead-cond", action="store_true",
+                            help="Disable dead-conditional elimination (part of DCE)")
     arg_parser.add_argument("--render_ast", metavar="OUTPUT.dot",
                             help="Render AST to a Graphviz dot file")
     arg_parser.add_argument("--render_symb", metavar="OUTPUT.dot",
@@ -102,7 +108,6 @@ def main():
     # ── #define preprocessing ──────────────────────────────────
     print("=== Processing #define statements ===")
     try:
-        # Probeer import van preprocessor uit parser.preprocessor
         try:
             from parser.preprocessor.preprocessor import Preprocessor
         except ImportError:
@@ -139,9 +144,32 @@ def main():
     print()
 
     # ── Constant folding ──────────────────────────────────────
+    # Must run BEFORE dead-code elimination so that constant conditions
+    # (e.g. `if (2 - 2)`) are already reduced to integer literals by the
+    # time the DCE sees them.
     ast = ConstantFolder(enabled=not args.no_fold).visit(ast)
 
-    print("=== AST after folding ===")
+    print("=== AST after constant folding ===")
+    print(ast)
+    print()
+
+    # ── Dead code elimination ─────────────────────────────────
+    if not args.no_dce:
+        from parser.optimizations.dead_code_eliminator import DeadCodeEliminator
+
+        dce = DeadCodeEliminator(
+            unused_vars=not args.no_dce_unused_vars,
+            dead_conditionals=not args.no_dce_dead_cond,
+        )
+        ast = dce.visit(ast)
+
+        if dce.warnings:
+            print("=== Dead Code Elimination warnings ===")
+            for w in dce.warnings:
+                print(f"  {w}")
+            print()
+
+    print("=== AST after dead code elimination ===")
     print(ast)
     print()
 
