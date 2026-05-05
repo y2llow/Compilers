@@ -1,5 +1,6 @@
 import sys
 import os
+
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 import argparse
 import antlr4
@@ -12,7 +13,6 @@ from parser.dot_visitor import DotVisitor
 from parser.error_handler import SyntaxErrorListener, RED, RESET
 from parser.semantics.semantic_analyser import SemanticAnalyzer
 from parser.comment_collector import CommentCollector
-from parser.preprocessor import Preprocessor
 
 
 def main():
@@ -78,14 +78,45 @@ def main():
     # ── AST bouwen ────────────────────────────────────────────
     ast = ASTBuilder(comment_collector, source_lines).visit(tree)
 
-    print("=== AST before preprocessing ===")
+    print("=== AST before include processing ===")
     print(ast)
     print()
 
-    # ── Preprocessor ───────────────────────────────────
-    ast = Preprocessor().preprocess(ast)
+    # ── Include processing (mandatory) ────────────────────────
+    print("=== Processing #include directives ===")
+    try:
+        from parser.preprocessor.include_handler import IncludeHandler
+        from parser.preprocessor.include_processor import IncludeProcessor
 
-    print("=== AST after preprocessing ===")
+        include_handler = IncludeHandler(args.input)
+        ast = IncludeProcessor(include_handler, source_lines).process(ast)
+
+    except Exception as e:
+        print(f"⚠ Include processing skipped: {e}")
+    print()
+
+    print("=== AST after include processing ===")
+    print(ast)
+    print()
+
+    # ── #define preprocessing ──────────────────────────────────
+    print("=== Processing #define statements ===")
+    try:
+        # Probeer import van preprocessor uit parser.preprocessor
+        try:
+            from parser.preprocessor.preprocessor import Preprocessor
+        except ImportError:
+            from parser.preprocessor import Preprocessor
+
+        ast = Preprocessor().preprocess(ast)
+        print("✓ Define processing completed")
+    except Exception as e:
+        import traceback
+        print(f"⚠ Preprocessor failed: {e}")
+        traceback.print_exc()
+    print()
+
+    print("=== AST after define processing ===")
     print(ast)
     print()
 

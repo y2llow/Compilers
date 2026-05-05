@@ -83,6 +83,8 @@ class Preprocessor:
         return node
 
     def visit_FunctionDefNode(self, node: FunctionDefNode) -> FunctionDefNode:
+        node.return_type = self._resolve_type_name(node.return_type)
+        node.params = [self.visit(param) for param in node.params]
         node.body = self.visit(node.body)
         return node
 

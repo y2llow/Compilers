@@ -791,6 +791,63 @@
       "file": "src/tests/ci/assignment_5_functions/valid/15_function_double_pointer.c",
       "expect": "valid_ast",
       "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a5_basic_includes",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/valid/16_basic_includes.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a5_double_include",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/valid/17_double_include.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a5_multiple_headers",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/valid/18_multiple_headers.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+        {
+      "name": "a5_header_no_guard",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/valid/19_no_guard.c",
+      "expect": "valid_ast",
+      "contains": [
+        "Semantic analysis passed"
+      ]
+    },
+    {
+      "name": "a5_nested_calls",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/valid/20_nested_include.c",
+      "expect": "valid_ast",
+      "contains": [
+        "Semantic analysis passed"
+      ]
+    },
+    {
+      "name": "a5_define_in_header",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/valid/21_define_in_header.c",
+      "expect": "valid_ast",
+      "contains": [
+        "Semantic analysis passed"
+      ]
+    },
+        {
+      "name": "a5_include_in_include",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/valid/22_include_in_include",
+      "expect": "valid_ast",
+      "contains": [
+        "Semantic analysis passed"
+      ]
     }
   ]
 }
