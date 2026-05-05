@@ -14,11 +14,6 @@ class SemanticAnalyzer:
     """
     Semantische analysator voor de AST.
 
-    Werkt met:
-        ProgramNode.top_level_items
-        FunctionDefNode.body
-        CompoundStmtNode.items
-
     Controleert assignment 1-5 functionaliteit:
     - main bestaat
     - variabelen moeten gedeclareerd zijn
@@ -28,6 +23,7 @@ class SemanticAnalyzer:
     - pointer checks
     - array checks, inclusief 1D en 2D array access
     - printf/scanf vereisen #include <stdio.h>
+    - control flow: break/continue context
     - functions: declarations, definitions, calls, argument checking
     """
 
@@ -39,7 +35,16 @@ class SemanticAnalyzer:
         self.current_function_return_type = None
         self.loop_depth = 0
         self.switch_depth = 0
-        self.functions = {}  # name -> {'return_type': str, 'return_ptr': int, 'params': [...], 'defined': bool, 'line': int}
+
+        # name -> {
+        #   'return_type': str,
+        #   'return_ptr': int,
+        #   'params': [(type_name, pointer_depth, dimensions_tuple), ...],
+        #   'defined': bool,
+        #   'line': int,
+        #   'column': int
+        # }
+        self.functions = {}
 
     # ============================================================
     # Error / warning helpers
@@ -80,7 +85,6 @@ class SemanticAnalyzer:
         visitor(node)
 
     def generic_visit(self, node):
-        # Nieuwe toekomstige nodes mogen voorlopig niet crashen.
         pass
 
     # ============================================================
@@ -90,29 +94,30 @@ class SemanticAnalyzer:
     def visit_ProgramNode(self, node):
         has_main = False
 
-        # Eerst includes verwerken, zodat printf/scanf stdio kennen.
+        # 1. Includes verwerken.
         for item in node.top_level_items:
             if isinstance(item, IncludeNode):
                 self.visit(item)
 
-        # Enum constants registreren als int constants.
+        # 2. Enum constants registreren als globale int constants.
         for item in node.top_level_items:
             if isinstance(item, EnumDeclNode):
                 self.visit(item)
 
-        # Top-level variabelen registreren.
+        # 3. Top-level variabelen registreren.
         for item in node.top_level_items:
             if isinstance(item, VarDeclNode):
                 self.visit(item)
 
-        # Functies registreren: eerst alle declarations en definitions inlezen
+        # 4. Alle functie-declaraties en definities vooraf registreren.
+        # Dit is nodig zodat function calls naar functies later in de file werken.
         for item in node.top_level_items:
             if isinstance(item, FunctionDeclNode):
                 self._register_function_declaration(item)
             elif isinstance(item, FunctionDefNode):
                 self._register_function_definition(item)
 
-        # Nu functies analyseren
+        # 5. Functie bodies analyseren.
         for item in node.top_level_items:
             if isinstance(item, FunctionDefNode):
                 if item.name == "main":
@@ -123,10 +128,10 @@ class SemanticAnalyzer:
                             getattr(item, 'column', 0),
                             "Error: main function must return int"
                         )
+
                 self.visit(item)
 
             elif isinstance(item, (TypedefNode, StructDeclNode, DefineNode)):
-                # Nog niet volledig semantisch uitgewerkt.
                 pass
 
         if not has_main:
@@ -135,79 +140,106 @@ class SemanticAnalyzer:
                 "Error: missing 'int main()' function"
             )
 
-    def _register_function_declaration(self, node):
-        """Registreer een forward declaration van een functie."""
-        name = node.name
-        func_info = {
+    def visit_IncludeNode(self, node):
+        if node.header == 'stdio.h':
+            self.stdio_included = True
+
+    def visit_DefineNode(self, node):
+        pass
+
+    def visit_TypedefNode(self, node):
+        pass
+
+    def visit_StructDeclNode(self, node):
+        pass
+
+    # ============================================================
+    # Function registration helpers
+    # ============================================================
+
+    def _param_signature(self, params):
+        result = []
+
+        for p in params:
+            dims = tuple(getattr(p, 'array_dimensions', []) or [])
+            result.append((p.type_name, p.pointer_depth, dims))
+
+        return result
+
+    def _function_signature(self, node):
+        return {
             'return_type': node.return_type,
             'return_ptr': node.return_ptr,
-            'params': node.params,
-            'defined': False,
-            'line': getattr(node, 'line', 0)
+            'params': self._param_signature(node.params),
+            'defined': isinstance(node, FunctionDefNode),
+            'line': getattr(node, 'line', 0),
+            'column': getattr(node, 'column', 0),
         }
+
+    def _same_function_signature(self, a, b):
+        return (
+            a['return_type'] == b['return_type']
+            and a['return_ptr'] == b['return_ptr']
+            and a['params'] == b['params']
+        )
+
+    def _register_function_declaration(self, node):
+        name = node.name
+        sig = self._function_signature(node)
+        sig['defined'] = False
 
         if name not in self.functions:
-            self.functions[name] = func_info
-        else:
-            # Forward declaration na eerdere declaration/definition: check match
-            existing = self.functions[name]
-            if (existing['return_type'] != node.return_type or
-                existing['return_ptr'] != node.return_ptr or
-                len(existing['params']) != len(node.params)):
-                self.add_error(
-                    getattr(node, 'line', 0),
-                    getattr(node, 'column', 0),
-                    f"Error: conflicting function declaration for '{name}' (previously declared at line {existing['line']})"
-                )
+            self.functions[name] = sig
+            return
+
+        existing = self.functions[name]
+
+        if not self._same_function_signature(existing, sig):
+            self.add_error(
+                getattr(node, 'line', 0),
+                getattr(node, 'column', 0),
+                f"Error: conflicting function declaration for '{name}' "
+                f"(previously declared at line {existing['line']})"
+            )
 
     def _register_function_definition(self, node):
-        """Registreer een functiedefinitie."""
         name = node.name
-        func_info = {
-            'return_type': node.return_type,
-            'return_ptr': node.return_ptr,
-            'params': node.params,
-            'defined': True,
-            'line': getattr(node, 'line', 0)
-        }
+        sig = self._function_signature(node)
+        sig['defined'] = True
 
-        if name in self.functions:
-            existing = self.functions[name]
+        if name not in self.functions:
+            self.functions[name] = sig
+            return
 
-            # Check of de signature matcht met eerdere declaration/definition
-            if (existing['return_type'] != node.return_type or
-                existing['return_ptr'] != node.return_ptr or
-                len(existing['params']) != len(node.params)):
-                self.add_error(
-                    getattr(node, 'line', 0),
-                    getattr(node, 'column', 0),
-                    f"Error: conflicting function definition for '{name}' (previously declared at line {existing['line']})"
-                )
-                return
+        existing = self.functions[name]
 
-            # Check op duplicate definition (twee definitions, niet declaration + definition)
-            if existing['defined']:
-                self.add_error(
-                    getattr(node, 'line', 0),
-                    getattr(node, 'column', 0),
-                    f"Error: function '{name}' already defined at line {existing['line']}"
-                )
-                return
+        if not self._same_function_signature(existing, sig):
+            self.add_error(
+                getattr(node, 'line', 0),
+                getattr(node, 'column', 0),
+                f"Error: conflicting function definition for '{name}' "
+                f"(previously declared at line {existing['line']})"
+            )
+            return
 
-            # Update de entry: zet defined=True (declaration -> definition is valide)
-            self.functions[name]['defined'] = True
-        else:
-            # Eerste keer: voeg toe
-            self.functions[name] = func_info
+        if existing.get('defined'):
+            self.add_error(
+                getattr(node, 'line', 0),
+                getattr(node, 'column', 0),
+                f"Error: redefinition of function '{name}' "
+                f"(previously defined at line {existing['line']})"
+            )
+            return
 
+        existing['defined'] = True
+        existing['line'] = getattr(node, 'line', 0)
+        existing['column'] = getattr(node, 'column', 0)
+
+    # ============================================================
+    # Enum
+    # ============================================================
 
     def visit_EnumDeclNode(self, node):
-        """
-        Enum values gedragen zich als int constants.
-        Voorbeeld:
-            enum Color { RED, GREEN };
-        RED = 0, GREEN = 1
-        """
         current_value = 0
 
         for const in node.constants:
@@ -233,17 +265,25 @@ class SemanticAnalyzer:
 
             current_value += 1
 
+    # ============================================================
+    # Functions
+    # ============================================================
+
     def visit_FunctionDeclNode(self, node):
-        # Forward declarations werden in _register_function_declaration afgehandeld
+        # Declarations zijn al verwerkt in visit_ProgramNode.
         pass
 
     def visit_FunctionDefNode(self, node):
+        # Belangrijk:
+        # NIET opnieuw registreren/checken hier.
+        # Dat gebeurt al in visit_ProgramNode via _register_function_definition.
+        # Anders krijg je foutief "redefinition of function main".
+
         old_return_type = self.current_function_return_type
         self.current_function_return_type = (node.return_type, node.return_ptr)
 
         self.symbol_table.push_scope()
 
-        # Parameters toevoegen aan functie-scope.
         for param in node.params:
             success, existing = self.symbol_table.add_symbol(
                 param.name,
@@ -262,12 +302,54 @@ class SemanticAnalyzer:
                     f"Error: parameter '{param.name}' already declared at line {existing.line}, column {existing.column}"
                 )
 
-        # Function body zelf analyseren zonder extra scope,
-        # want de function scope bestaat hierboven al.
         self._visit_block_items(node.body.items)
 
         self.symbol_table.pop_scope()
         self.current_function_return_type = old_return_type
+
+    def visit_FunctionCallNode(self, node):
+        if node.name not in self.functions:
+            self.add_error(
+                getattr(node, 'line', 0),
+                getattr(node, 'column', 0),
+                f"Error: implicit declaration of function '{node.name}'"
+            )
+
+            for arg in node.args:
+                self._check_expression(arg)
+
+            return
+
+        func_info = self.functions[node.name]
+        expected_params = func_info['params']
+        expected_param_count = len(expected_params)
+        actual_arg_count = len(node.args)
+
+        if actual_arg_count != expected_param_count:
+            self.add_error(
+                getattr(node, 'line', 0),
+                getattr(node, 'column', 0),
+                f"Error: function '{node.name}' expects {expected_param_count} argument(s), got {actual_arg_count}"
+            )
+
+        for i, arg in enumerate(node.args):
+            self._check_expression(arg)
+
+            if i < expected_param_count:
+                expected_type_name, expected_ptr, _dims = expected_params[i]
+                arg_type = self._get_expression_type(arg)
+
+                if arg_type is not None:
+                    self._check_type_assignment(
+                        target_type=(expected_type_name, expected_ptr),
+                        value_type=arg_type,
+                        target_name=f"argument {i + 1}",
+                        node=node
+                    )
+
+    # ============================================================
+    # Compound / block
+    # ============================================================
 
     def visit_CompoundStmtNode(self, node):
         self.symbol_table.push_scope()
@@ -319,10 +401,10 @@ class SemanticAnalyzer:
 
         self.loop_depth += 1
 
+        self.visit(node.body)
+
         if node.update is not None:
             self.visit(node.update)
-
-        self.visit(node.body)
 
         self.loop_depth -= 1
         self.symbol_table.pop_scope()
@@ -421,7 +503,7 @@ class SemanticAnalyzer:
     def visit_ReturnNode(self, node):
         if node.value is None:
             if self.current_function_return_type is not None:
-                return_type, return_ptr = self.current_function_return_type
+                return_type, _return_ptr = self.current_function_return_type
                 if return_type != 'void':
                     self.add_error(
                         getattr(node, 'line', 0),
@@ -503,47 +585,6 @@ class SemanticAnalyzer:
         for arg in node.args:
             self._check_expression(arg)
 
-    def visit_FunctionCallNode(self, node):
-        # Check of functie bestaat
-        if node.name not in self.functions:
-            self.add_error(
-                getattr(node, 'line', 0),
-                getattr(node, 'column', 0),
-                f"Error: implicit declaration of function '{node.name}'"
-            )
-            for arg in node.args:
-                self._check_expression(arg)
-            return
-
-        func_info = self.functions[node.name]
-        expected_param_count = len(func_info['params'])
-        actual_arg_count = len(node.args)
-
-        # Check argument count
-        if actual_arg_count != expected_param_count:
-            self.add_error(
-                getattr(node, 'line', 0),
-                getattr(node, 'column', 0),
-                f"Error: function '{node.name}' expects {expected_param_count} argument(s), got {actual_arg_count}"
-            )
-
-        # Check argument types
-        for i, arg in enumerate(node.args):
-            self._check_expression(arg)
-
-            if i < expected_param_count:
-                param = func_info['params'][i]
-                arg_type = self._get_expression_type(arg)
-
-                if arg_type is not None:
-                    param_type = (param.type_name, param.pointer_depth)
-                    self._check_type_assignment(
-                        target_type=param_type,
-                        value_type=arg_type,
-                        target_name=f"argument {i+1}",
-                        node=node
-                    )
-
     # ============================================================
     # Array checks
     # ============================================================
@@ -569,7 +610,8 @@ class SemanticAnalyzer:
 
         for elem in initializer.elements:
             if isinstance(elem, ArrayInitializerNode):
-                pass
+                # Recursieve checks voor nested arrays kunnen later uitgebreider.
+                self.visit_ArrayInitializerNode(elem)
             else:
                 self._check_expression(elem)
 
@@ -578,13 +620,6 @@ class SemanticAnalyzer:
     # ============================================================
 
     def _normalize_dimensions(self, dims):
-        """
-        Zorgt ervoor dat array dimensions altijd een lijst zijn.
-        Voorbeeld:
-            3      -> [3]
-            [2, 3] -> [2, 3]
-            None   -> []
-        """
         if dims is None:
             return []
 
@@ -625,20 +660,14 @@ class SemanticAnalyzer:
             if array_type is None:
                 return None
 
-            # Nieuwe array-vorm:
-            # (base_type, pointer_depth, True, remaining_dimensions)
             if len(array_type) > 3 and array_type[2]:
                 remaining_dims = self._normalize_dimensions(array_type[3])
 
-                # matrix[1] blijft nog een array-achtige rij als er dimensies over zijn.
                 if len(remaining_dims) > 1:
                     return (array_type[0], array_type[1], True, remaining_dims[1:])
 
-                # values[1] of matrix[1][0] is een gewone waarde.
                 return (array_type[0], array_type[1])
 
-            # Oude array-vorm:
-            # (base_type, pointer_depth, True)
             if len(array_type) > 2 and array_type[2]:
                 return (array_type[0], array_type[1])
 
@@ -694,11 +723,10 @@ class SemanticAnalyzer:
             return ('int', 0)
 
         if isinstance(node, FunctionCallNode):
-            # Kijk op in de functietabel voor return type
             if node.name in self.functions:
                 func_info = self.functions[node.name]
                 return (func_info['return_type'], func_info['return_ptr'])
-            # Fallback: zelf aangenomen int
+
             return ('int', 0)
 
         return None
@@ -743,20 +771,6 @@ class SemanticAnalyzer:
             return None
 
         return None
-
-    def _function_signature(self, node):
-        params = []
-        for p in node.params:
-            params.append((p.type_name, p.pointer_depth))
-
-        return {
-            "return_type": node.return_type,
-            "return_ptr": node.return_ptr,
-            "params": params,
-            "line": getattr(node, "line", 0),
-            "column": getattr(node, "column", 0),
-            "defined": isinstance(node, FunctionDefNode),
-        }
 
     # ============================================================
     # Expression checks
@@ -979,8 +993,8 @@ class SemanticAnalyzer:
         if op in ('<<', '>>'):
             right = node.right
             is_negative = (
-                (isinstance(right, UnaryOpNode) and right.op == '-') or
-                (isinstance(right, IntLiteralNode) and right.value < 0)
+                (isinstance(right, UnaryOpNode) and right.op == '-')
+                or (isinstance(right, IntLiteralNode) and right.value < 0)
             )
 
             if is_negative:
@@ -994,8 +1008,8 @@ class SemanticAnalyzer:
         target_base, target_ptr = target_type[0], target_type[1]
         value_base, value_ptr = value_type[0], value_type[1]
 
-        # char array = "text"
-        if target_base == 'char' and target_ptr == 0 and value_base == 'char' and value_ptr == 1:
+        # char* / char array = "text"
+        if target_base == 'char' and value_base == 'char' and value_ptr == 1:
             return
 
         if value_ptr > 0 and target_ptr == 0:
@@ -1078,7 +1092,6 @@ class SemanticAnalyzer:
     def _check_format_args(self, fmt: str, args: list, func_name: str, node):
         import re
 
-        # Match %[width][code], maar negeer %%
         specifiers = re.findall(r'(?<!%)%(?:\d+)?[dxsfc]', fmt)
 
         expected = len(specifiers)
@@ -1100,7 +1113,6 @@ class SemanticAnalyzer:
             return "", 0
 
         output = []
-
         sorted_errors = sorted(self.errors, key=lambda e: (e['line'], e['column']))
 
         for error in sorted_errors:
@@ -1116,7 +1128,6 @@ class SemanticAnalyzer:
             return "", 0
 
         output = []
-
         sorted_warnings = sorted(self.warnings, key=lambda w: (w['line'], w['column']))
 
         for warning in sorted_warnings:

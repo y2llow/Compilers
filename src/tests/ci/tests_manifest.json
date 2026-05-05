@@ -490,14 +490,14 @@
       "assignment": 5,
       "file": "src/tests/ci/assignment_5_functions/invalid_semantic/01_function_duplicate_def.c",
       "expect": "semantic_error",
-      "contains": ["[Semantic Error]", "already defined"]
+      "contains": ["[Semantic Error]", "redefinition"]
     },
     {
       "name": "a5_invalid_duplicate_definition",
       "assignment": 5,
       "file": "src/tests/ci/assignment_5_functions/invalid_semantic/02_function_duplicate_def.c",
       "expect": "semantic_error",
-      "contains": ["[Semantic Error]", "already defined"]
+      "contains": ["[Semantic Error]", "redefinition"]
     },
     {
       "name": "a5_invalid_argument_count",
