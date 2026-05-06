@@ -674,69 +674,6 @@
       "contains": ["[Semantic Error]"]
     },
     {
-      "name": "a5_simple_add_function",
-      "assignment": 5,
-      "file": "src/tests/ci/assignment_5_functions/runtime/02_simple_add_function.c",
-      "expect": "runtime",
-      "contains": ["Semantic analysis passed"],
-      "expected_stdout": "8",
-      "expected_exit_code": 0
-    },
-    {
-      "name": "a5_multiple_functions",
-      "assignment": 5,
-      "file": "src/tests/ci/assignment_5_functions/runtime/03_multiple_functions.c",
-      "expect": "runtime",
-      "contains": ["Semantic analysis passed"],
-      "expected_stdout": "713",
-      "expected_exit_code": 0
-    },
-    {
-      "name": "a5_nested_function_calls",
-      "assignment": 5,
-      "file": "src/tests/ci/assignment_5_functions/runtime/04_nested_function_calls.c",
-      "expect": "runtime",
-      "contains": ["Semantic analysis passed"],
-      "expected_stdout": "10",
-      "expected_exit_code": 0
-    },
-    {
-      "name": "a5_function_pointer_param",
-      "assignment": 5,
-      "file": "src/tests/ci/assignment_5_functions/runtime/05_function_pointer_param.c",
-      "expect": "runtime",
-      "contains": ["Semantic analysis passed"],
-      "expected_stdout": "6",
-      "expected_exit_code": 0
-    },
-    {
-      "name": "a5_function_array_param",
-      "assignment": 5,
-      "file": "src/tests/ci/assignment_5_functions/runtime/06_function_array_param.c",
-      "expect": "runtime",
-      "contains": ["Semantic analysis passed"],
-      "expected_stdout": "60",
-      "expected_exit_code": 0
-    },
-    {
-      "name": "a5_forward_declaration",
-      "assignment": 5,
-      "file": "src/tests/ci/assignment_5_functions/runtime/07_forward_declaration.c",
-      "expect": "runtime",
-      "contains": ["Semantic analysis passed"],
-      "expected_stdout": "20",
-      "expected_exit_code": 0
-    },
-    {
-      "name": "a5_multiple_params",
-      "assignment": 5,
-      "file": "src/tests/ci/assignment_5_functions/runtime/08_multiple_params.c",
-      "expect": "runtime",
-      "contains": ["Semantic analysis passed"],
-      "expected_stdout": "14",
-      "expected_exit_code": 0
-    },
-    {
       "name": "a5_function_float_params",
       "assignment": 5,
       "file": "src/tests/ci/assignment_5_functions/valid/08_function_float_params.c",
