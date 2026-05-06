@@ -312,6 +312,10 @@ class LLVMGenerator:
             self.builder.ret_void()
         else:
             value = self.visit(node.value)
+
+            func_return_type = self.builder.function.function_type.return_type
+            value = self._cast_value(value, func_return_type)
+
             self.builder.ret(value)
 
     def visit_VarDeclNode(self, node: VarDeclNode):
@@ -365,38 +369,52 @@ class LLVMGenerator:
         """
         arr[i] of matrix[i][j]
 
-        LLVM:
-            %ptr = getelementptr [5 x i32], [5 x i32]* %arr, i32 0, i32 i
-            %val = load i32, i32* %ptr
+        Werkt voor:
+        - echte arrays: int arr[3]
+        - pointer parameters: int* arr
         """
-        # Haal de pointer op naar het array
-        # Kan genest zijn: matrix[i][j] → ArrayAccess(ArrayAccess(matrix, i), j)
-        if isinstance(node.array, IdentifierNode):
-            arr_ptr = self.variables[node.array.name]
-        else:
-            # Geneste array access: eerst de binnenste pointer berekenen
-            arr_ptr = self._get_array_ptr(node.array)
-
-        index = self.visit(node.index)
-        zero = ir.Constant(ir.IntType(32), 0)
-        elem_ptr = self.builder.gep(arr_ptr, [zero, index], inbounds=True)
-
+        elem_ptr = self._get_array_ptr(node)
         return self.builder.load(elem_ptr)
 
     def _get_array_ptr(self, node):
         """
-        Geeft de pointer naar een array element terug zonder te laden.
-        Gebruikt voor geneste array access (multi-dim).
+        Geeft de pointer naar een array-element terug zonder te laden.
+
+        Ondersteunt:
+        - lokale arrays: int values[3]
+        - pointer parameters: int* arr
+        - geneste array access: matrix[i][j]
         """
-        if isinstance(node, IdentifierNode):
-            return self.variables[node.name]
-
-        # ArrayAccessNode: bereken de pointer naar dit element
-        arr_ptr = self._get_array_ptr(node.array)
-        index = self.visit(node.index)
         zero = ir.Constant(ir.IntType(32), 0)
-        return self.builder.gep(arr_ptr, [zero, index], inbounds=True)
 
+        if isinstance(node, IdentifierNode):
+            var_ptr = self.variables[node.name]
+
+            # Lokale array: var_ptr is bv [3 x i32]*
+            if isinstance(var_ptr.type.pointee, ir.ArrayType):
+                return var_ptr
+
+            # Pointer variable/parameter:
+            # var_ptr is bv i32**, dus eerst loaden naar i32*
+            if isinstance(var_ptr.type.pointee, ir.PointerType):
+                return self.builder.load(var_ptr)
+
+            return var_ptr
+
+        if isinstance(node, ArrayAccessNode):
+            base_ptr = self._get_array_ptr(node.array)
+            index = self.visit(node.index)
+
+            # Als base_ptr naar een echte LLVM array wijst: [N x T]*
+            # dan heb je GEP [0, index] nodig.
+            if isinstance(base_ptr.type.pointee, ir.ArrayType):
+                return self.builder.gep(base_ptr, [zero, index], inbounds=True)
+
+            # Als base_ptr een gewone pointer is: T*
+            # dan heb je GEP [index] nodig.
+            return self.builder.gep(base_ptr, [index], inbounds=True)
+
+        raise NotImplementedError(f"Array pointer lookup not supported for {type(node)}")
     def visit_AssignNode(self, node: AssignNode):
         self._collect_comments(node)
 
@@ -429,19 +447,16 @@ class LLVMGenerator:
             value = self.visit(node.value)
             self.builder.store(value, ptr_loaded)
 
-        elif isinstance(node.target, ArrayAccessNode):
-            # Array assignment: arr[i] = 10
-            elem_ptr = self._get_array_ptr(node.target)
-            index = self.visit(node.target.index)
-            zero = ir.Constant(ir.IntType(32), 0)
-            if isinstance(node.target.array, IdentifierNode):
-                arr_ptr = self.variables[node.target.array.name]
-            else:
-                arr_ptr = self._get_array_ptr(node.target.array)
-            elem_ptr = self.builder.gep(arr_ptr, [zero, index], inbounds=True)
-            value = self.visit(node.value)
-            self.builder.store(value, elem_ptr)
 
+        elif isinstance(node.target, ArrayAccessNode):
+
+            elem_ptr = self._get_array_ptr(node.target)
+
+            value = self.visit(node.value)
+
+            value = self._cast_value(value, elem_ptr.type.pointee)
+
+            self.builder.store(value, elem_ptr)
         else:
             raise NotImplementedError("Assignment naar dit type nog niet ondersteund")
 

@@ -397,6 +397,12 @@ class ConstantFolder:
 
     def visit_FunctionCallNode(self, node: FunctionCallNode) -> FunctionCallNode:
         node.args = [self.visit(arg) for arg in node.args]
+
+        # Function calls kunnen side effects hebben, zeker via pointer parameters:
+        #   set_to_9(&x);
+        # Daardoor mogen we oude constant-propagation info zoals x = 1 niet behouden.
+        self._known.clear()
+
         return node
 
     def visit_SizeofNode(self, node: SizeofNode) -> SizeofNode:
