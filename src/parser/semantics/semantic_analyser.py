@@ -72,7 +72,14 @@ class SemanticAnalyzer:
     # Public entry point
     # ============================================================
 
-    def analyze(self, node):
+    def analyze(self, node, typedef_registry=None):
+        if typedef_registry:
+            for name, info in typedef_registry.items():
+                if isinstance(info, tuple) and len(info) == 2:
+                    self.known_types.add(name)
+                    self.typedef_map[name] = info
+                else:
+                    self.known_types.add(name)
         self.visit(node)
         return len(self.errors) == 0
 
@@ -157,10 +164,15 @@ class SemanticAnalyzer:
         pass
 
     def visit_TypedefNode(self, node):
-        # The new name must not clash with existing types
         builtin_types = {'int', 'float', 'char', 'void'}
-        if (node.new_name in builtin_types
-                or node.new_name in self.known_types):
+
+        # If this typedef was already registered via the include registry,
+        # just ensure typedef_map is up to date and move on — it is not a conflict.
+        if node.new_name in self.known_types and node.new_name not in builtin_types:
+            self.typedef_map[node.new_name] = (node.existing_type, node.pointer_depth)
+            return
+
+        if node.new_name in builtin_types:
             self.add_error(
                 getattr(node, 'line', 0),
                 getattr(node, 'column', 0),

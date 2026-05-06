@@ -147,7 +147,7 @@ class ASTBuilder(CParserVisitor):
     # ?? Typedef ???????????????????????????????????????????????
 
     def visitTypedef_decl(self, ctx):
-        new_name = ctx.IDENTIFIER().getText()
+        new_name = ctx.typedef_name().getText()
 
         if ctx.type_spec():
             existing_type = ctx.type_spec().getText()
@@ -737,7 +737,11 @@ class ASTBuilder(CParserVisitor):
         return self._attach_position(node, ctx)
 
     def visitFloatLiteral(self, ctx):
-        node = FloatLiteralNode(float(ctx.FLOAT_LIT().getText()))
+        text = ctx.FLOAT_LIT().getText()
+        if text.lower().endswith('f'):
+            text = text[:-1]
+        node = FloatLiteralNode(float(text))
+        
         return self._attach_position(node, ctx)
 
     def visitCharLiteral(self, ctx):

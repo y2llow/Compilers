@@ -120,34 +120,22 @@ class IncludeProcessor:
         cc_stream.fill()
 
         comment_collector = CommentCollector(cc_stream, contents_lines)
-        try:
-            builder = ASTBuilder(comment_collector, contents_lines)
 
-            # SEED: Load typedefs from previously-processed includes
-            builder.known_type_names.update(self.typedef_registry.keys())
+        builder = ASTBuilder(comment_collector, contents_lines)
 
-            ast = builder.visit(tree)
+        # SEED: Load typedefs from previously-processed includes.
+        # known_type_names is a set, so only seed from typedef_registry keys.
+        builder.known_type_names.update(self.typedef_registry.keys())
 
-            # MERGE: Save any new typedefs back to the shared registry
-            self.typedef_registry.update(builder.known_type_names)
-            self.typedef_registry.update(builder.typedef_map)
+        ast = builder.visit(tree)
 
-        except Exception:
-            return []
-
-        # Step 3: build AST from the already-complete parse tree.
-        # IMPORTANT: seed the builder's known_type_names from the shared registry
-        # so that typedefs from previously-included files are recognized.
-        try:
-            builder = ASTBuilder(comment_collector, contents_lines)
-            builder.known_type_names.update(self.typedef_registry.keys())
-            ast = builder.visit(tree)
-        except Exception:
-            return []
-
-        # IMPORTANT: merge typedefs found in this file back to the shared registry
-        # so that subsequent includes can see them.
-        self.typedef_registry.update(builder.known_type_names)
+        # MERGE: Save any new typedefs back to the shared registry.
+        # known_type_names is a plain set — iterate it manually so that
+        # dict.update() is never called with a set (which raises TypeError).
+        for name in builder.known_type_names:
+            if name not in self.typedef_registry:
+                self.typedef_registry[name] = None
+        # typedef_map is already a proper dict: name -> (base_type, pointer_depth)
         self.typedef_registry.update(builder.typedef_map)
 
         if isinstance(ast, ProgramNode):

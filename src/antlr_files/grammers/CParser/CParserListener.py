@@ -62,6 +62,15 @@ class CParserListener(ParseTreeListener):
         pass
 
 
+    # Enter a parse tree produced by CParserParser#typedef_name.
+    def enterTypedef_name(self, ctx:CParserParser.Typedef_nameContext):
+        pass
+
+    # Exit a parse tree produced by CParserParser#typedef_name.
+    def exitTypedef_name(self, ctx:CParserParser.Typedef_nameContext):
+        pass
+
+
     # Enter a parse tree produced by CParserParser#enum_decl.
     def enterEnum_decl(self, ctx:CParserParser.Enum_declContext):
         pass
