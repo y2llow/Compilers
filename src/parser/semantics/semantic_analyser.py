@@ -36,6 +36,7 @@ class SemanticAnalyzer:
         self.loop_depth = 0
         self.switch_depth = 0
         self.known_types = set()
+        self.included_types = set()      # Types seeded from #include registries
         self.typedef_map = {}           # Maps typedef alias -> (underlying_type_name, pointer_depth)
         self.struct_members = {}         # Maps struct name -> list of StructMemberNode
 
@@ -77,9 +78,11 @@ class SemanticAnalyzer:
             for name, info in typedef_registry.items():
                 if isinstance(info, tuple) and len(info) == 2:
                     self.known_types.add(name)
+                    self.included_types.add(name)
                     self.typedef_map[name] = info
                 else:
                     self.known_types.add(name)
+                    self.included_types.add(name)
         self.visit(node)
         return len(self.errors) == 0
 
@@ -166,13 +169,28 @@ class SemanticAnalyzer:
     def visit_TypedefNode(self, node):
         builtin_types = {'int', 'float', 'char', 'void'}
 
-        # If this typedef was already registered via the include registry,
-        # just ensure typedef_map is up to date and move on — it is not a conflict.
-        if node.new_name in self.known_types and node.new_name not in builtin_types:
+        # A typedef node that came from an included header was already seeded
+        # into known_types via the typedef_registry.  Seeing it again in the
+        # AST is normal — just update typedef_map and move on without error.
+        if node.new_name in self.included_types:
+            self.typedef_map[node.new_name] = (node.existing_type, node.pointer_depth)
+            self.included_types.discard(node.new_name)
+            return
+
+        # Allow `typedef struct Foo Foo` and `typedef enum Foo Foo`:
+        # the struct/enum name is registered in known_types first, but aliasing
+        # it to the same name is valid C and must not be treated as a conflict.
+        underlying = node.existing_type
+        for prefix in ('struct', 'enum'):
+            if underlying.startswith(prefix):
+                underlying = underlying[len(prefix):]
+                break
+        if node.new_name in self.known_types and node.new_name == underlying:
             self.typedef_map[node.new_name] = (node.existing_type, node.pointer_depth)
             return
 
-        if node.new_name in builtin_types:
+        # The new name must not clash with builtins or already-declared types
+        if node.new_name in builtin_types or node.new_name in self.known_types:
             self.add_error(
                 getattr(node, 'line', 0),
                 getattr(node, 'column', 0),
@@ -713,6 +731,50 @@ class SemanticAnalyzer:
     # Type helpers
     # ============================================================
 
+
+    def _resolve_struct_name(self, type_name: str) -> str:
+        """
+        Given a type name (possibly a typedef alias or with struct prefix),
+        return the bare struct name registered in self.struct_members, or None.
+        """
+        # Strip struct prefix from ANTLR concatenation e.g. "structPoint"
+        bare = type_name
+        if bare.startswith('struct'):
+            bare = bare[len('struct'):]
+
+        if bare in self.struct_members:
+            return bare
+
+        # Follow typedef chain
+        resolved = self._resolve_typedef(type_name)
+        if resolved.startswith('struct'):
+            resolved = resolved[len('struct'):]
+        if resolved in self.struct_members:
+            return resolved
+
+        # One more level: typedef alias -> struct name stored in typedef_map
+        if type_name in self.typedef_map:
+            underlying, _ = self.typedef_map[type_name]
+            if underlying.startswith('struct'):
+                underlying = underlying[len('struct'):]
+            if underlying in self.struct_members:
+                return underlying
+
+        return None
+
+    def _get_member_type(self, struct_name: str, member_name: str):
+        """
+        Look up a member by name in a struct and return (type_name, pointer_depth),
+        or None if the member does not exist.
+        """
+        members = self.struct_members.get(struct_name)
+        if members is None:
+            return None
+        for m in members:
+            if m.name == member_name:
+                return (m.type_name, m.pointer_depth)
+        return None
+
     def _resolve_typedef(self, type_name: str) -> str:
         """
         Follow typedef aliases to the underlying base type name.
@@ -843,6 +905,25 @@ class SemanticAnalyzer:
 
             return ('int', 0)
 
+        if isinstance(node, MemberAccessNode):
+            obj_type = self._get_expression_type(node.obj)
+            if obj_type is None:
+                return None
+            struct_name = self._resolve_struct_name(obj_type[0])
+            if struct_name is None:
+                return None
+            return self._get_member_type(struct_name, node.member)
+
+        if isinstance(node, PointerMemberAccessNode):
+            ptr_type = self._get_expression_type(node.ptr)
+            if ptr_type is None:
+                return None
+            # ptr_type[1] is pointer depth; must be > 0 to use ->
+            struct_name = self._resolve_struct_name(ptr_type[0])
+            if struct_name is None:
+                return None
+            return self._get_member_type(struct_name, node.member)
+
         return None
 
     def _get_binary_op_type(self, node):
@@ -887,6 +968,12 @@ class SemanticAnalyzer:
                 return (base_type, ptr_depth - 1)
 
             return None
+
+        if isinstance(node, MemberAccessNode):
+            return self._get_expression_type(node)
+
+        if isinstance(node, PointerMemberAccessNode):
+            return self._get_expression_type(node)
 
         return None
 
@@ -993,6 +1080,49 @@ class SemanticAnalyzer:
             if not node.is_type and node.operand is not None:
                 self._check_expression(node.operand)
 
+        elif isinstance(node, MemberAccessNode):
+            self._check_expression(node.obj)
+            obj_type = self._get_expression_type(node.obj)
+            if obj_type is not None:
+                struct_name = self._resolve_struct_name(obj_type[0])
+                if struct_name is None:
+                    self.add_error(
+                        getattr(node, 'line', 0),
+                        getattr(node, 'column', 0),
+                        f"Error: request for member '{node.member}' in something not a struct"
+                    )
+                elif self._get_member_type(struct_name, node.member) is None:
+                    self.add_error(
+                        getattr(node, 'line', 0),
+                        getattr(node, 'column', 0),
+                        f"Error: struct '{struct_name}' has no member '{node.member}'"
+                    )
+
+        elif isinstance(node, PointerMemberAccessNode):
+            self._check_expression(node.ptr)
+            ptr_type = self._get_expression_type(node.ptr)
+            if ptr_type is not None:
+                if ptr_type[1] == 0:
+                    self.add_error(
+                        getattr(node, 'line', 0),
+                        getattr(node, 'column', 0),
+                        f"Error: '->' applied to non-pointer type '{ptr_type[0]}'"
+                    )
+                else:
+                    struct_name = self._resolve_struct_name(ptr_type[0])
+                    if struct_name is None:
+                        self.add_error(
+                            getattr(node, 'line', 0),
+                            getattr(node, 'column', 0),
+                            f"Error: request for member '{node.member}' in something not a struct"
+                        )
+                    elif self._get_member_type(struct_name, node.member) is None:
+                        self.add_error(
+                            getattr(node, 'line', 0),
+                            getattr(node, 'column', 0),
+                            f"Error: struct '{struct_name}' has no member '{node.member}'"
+                        )
+
     def _check_identifier(self, node):
         symbol = self.symbol_table.lookup(node.name)
 
@@ -1044,6 +1174,12 @@ class SemanticAnalyzer:
                 getattr(node, 'column', 0),
                 "Error: cannot assign to literal"
             )
+
+        elif isinstance(node, MemberAccessNode):
+            self._check_expression(node)
+
+        elif isinstance(node, PointerMemberAccessNode):
+            self._check_expression(node)
 
         elif isinstance(node, (UnaryOpNode, BinaryOpNode, AddressOfNode)):
             self.add_error(
