@@ -295,23 +295,15 @@ class LLVMGenerator:
     # ═══════════════════════════════════════════════════════════
 
     def visit_ReturnNode(self, node: ReturnNode):
-        """
-        Genereer een return statement.
-
-        C code:
-            return 42;
-
-        LLVM IR:
-            ret i32 42
-        """
-        # NIEUW: Collect comments
         self._collect_comments(node)
 
+        # Guard: don't emit into an already-terminated block
+        if self.builder.block.is_terminated:
+            return
+
         if node.value is None:
-            # return; (zonder waarde)
             self.builder.ret_void()
         else:
-            # return <expressie>;
             value = self.visit(node.value)
             self.builder.ret(value)
 
@@ -461,36 +453,19 @@ class LLVMGenerator:
             raise NotImplementedError("Assignment naar dit type nog niet ondersteund")
 
     def visit_IfNode(self, node: IfNode):
-        """
-        Genereer LLVM voor if statement.
-
-        C code:
-            if (x > 0) { y = 1; } else { y = 2; }
-
-        LLVM IR:
-            br i1 %cond, label %then, label %else
-            then:
-                ...
-                br label %end
-            else:
-                ...
-                br label %end
-            end:
-        """
         self._collect_comments(node)
 
-        # Evalueer conditie
-        cond = self.visit(node.condition)
+        # Guard: don't emit into an already-terminated block
+        if self.builder.block.is_terminated:
+            return
 
-        # Zet conditie om naar i1 (boolean)
+        cond = self.visit(node.condition)
         cond_bool = self.builder.icmp_signed('!=', cond, ir.Constant(ir.IntType(32), 0))
 
-        # Maak basic blocks aan
         then_block = self.builder.block.parent.append_basic_block(name="if.then")
         else_block = self.builder.block.parent.append_basic_block(name="if.else")
         end_block = self.builder.block.parent.append_basic_block(name="if.end")
 
-        # Jump naar then of else
         self.builder.cbranch(cond_bool, then_block, else_block)
 
         # Then branch
@@ -506,7 +481,7 @@ class LLVMGenerator:
         if not else_block.is_terminated:
             self.builder.branch(end_block)
 
-        # End block
+        # End block — only position here if it's reachable
         self.builder.position_at_end(end_block)
 
     def _visit_block_items(self, items):
