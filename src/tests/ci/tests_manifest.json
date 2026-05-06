@@ -232,6 +232,70 @@
       "expected_exit_code": 5
     },
     {
+      "name": "a2_runtime_pointer_dereference_return",
+      "assignment": 2,
+      "file": "src/tests/ci/assignment_2_types_variables/runtime/02_pointer_dereference_return.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "",
+      "expected_exit_code": 7
+      },
+      {
+      "name": "a2_runtime_cast_float_to_int",
+      "assignment": 2,
+      "file": "src/tests/ci/assignment_2_types_variables/runtime/03_cast_float_to_int.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "",
+      "expected_exit_code": 7
+      },
+      {
+      "name": "a2_runtime_char_to_int_return",
+      "assignment": 2,
+      "file": "src/tests/ci/assignment_2_types_variables/runtime/04_char_to_int_return.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "",
+      "expected_exit_code": 65
+      },
+      {
+      "name": "a2_runtime_pointer_assignment_through_deref",
+      "assignment": 2,
+      "file": "src/tests/ci/assignment_2_types_variables/runtime/05_pointer_assignment_through_deref.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "",
+      "expected_exit_code": 9
+      },
+      {
+      "name": "a2_invalid_assign_to_const",
+      "assignment": 2,
+      "file": "src/tests/ci/assignment_2_types_variables/invalid_semantic/08_assign_to_const.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]", "const"]
+      },
+      {
+      "name": "a2_invalid_redeclare_same_scope",
+      "assignment": 2,
+      "file": "src/tests/ci/assignment_2_types_variables/invalid_semantic/09_redeclare_same_scope.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]", "already declared"]
+      },
+      {
+      "name": "a2_invalid_dereference_non_pointer",
+      "assignment": 2,
+      "file": "src/tests/ci/assignment_2_types_variables/invalid_semantic/10_dereference_non_pointer.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]", "dereference"]
+      },
+      {
+      "name": "a2_invalid_assign_pointer_to_int",
+      "assignment": 2,
+      "file": "src/tests/ci/assignment_2_types_variables/invalid_semantic/11_assign_pointer_to_int.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]", "incompatible types"]
+      },
+    {
       "name": "a3_valid_comments",
       "assignment": 3,
       "file": "src/tests/ci/assignment_3_arrays_io_llvm/valid/01_comments.c",
