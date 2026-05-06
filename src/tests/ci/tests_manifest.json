@@ -899,37 +899,6 @@
       "contains": ["Semantic analysis passed"]
     },
     {
-      "name": "a6_valid_basic",
-      "assignment": 6,
-      "file": "src/tests/ci/assignment_6_advanced_features/valid/01_basic.c",
-      "expect": "valid_ast",
-      "contains": ["Semantic analysis passed"]
-    },
-    {
-      "name": "a6_valid_includes",
-      "assignment": 6,
-      "file": "src/tests/ci/assignment_6_advanced_features/valid/02_includes.c",
-      "expect": "valid_ast",
-      "contains": ["Semantic analysis passed"]
-    },
-    {
-      "name": "a6_valid_warning_int_float",
-      "assignment": 6,
-      "file": "src/tests/ci/assignment_6_advanced_features/valid/03_warning_int_float.c",
-      "expect": "valid_ast",
-      "contains": ["Semantic analysis passed"]
-    },
-    {
-      "name": "a6_invalid_name_conflict",
-      "assignment": 6,
-      "file": "src/tests/ci/assignment_6_advanced_features/invalid_semantic/01_name_conflict.c",
-      "expect": "semantic_error",
-      "contains": ["[Semantic Error]"],
-      "contains": [
-        "Semantic analysis passed"
-      ]
-    },
-        {
       "name": "a5_runtime_void_function_call",
       "assignment": 5,
       "file": "src/tests/ci/assignment_5_functions/runtime/13_void_function_call.c",
@@ -1048,6 +1017,34 @@
       "file": "src/tests/ci/assignment_5_functions/invalid_semantic/23_void_function_used_as_value.c",
       "expect": "semantic_error",
       "contains": ["[Semantic Error]", "void"]
+    },
+    {
+      "name": "a6_valid_basic",
+      "assignment": 6,
+      "file": "src/tests/ci/assignment_6_advanced_features/valid/01_basic.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a6_valid_includes",
+      "assignment": 6,
+      "file": "src/tests/ci/assignment_6_advanced_features/valid/02_includes.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a6_valid_warning_int_float",
+      "assignment": 6,
+      "file": "src/tests/ci/assignment_6_advanced_features/valid/03_warning_int_float.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a6_invalid_name_conflict",
+      "assignment": 6,
+      "file": "src/tests/ci/assignment_6_advanced_features/invalid_semantic/01_name_conflict.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]"]
     }
   ]
 }
