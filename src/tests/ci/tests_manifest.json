@@ -472,6 +472,15 @@
       "expected_exit_code": 100
     },
     {
+      "name": "a4_runtime_enum_constant",
+      "assignment": 4,
+      "file": "src/tests/ci/assignment_4_control_flow/runtime/05_enum_constant_runtime.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "2\n",
+      "expected_exit_code": 0
+    },
+    {
       "name": "a5_valid_function_declaration",
       "assignment": 5,
       "file": "src/tests/ci/assignment_5_functions/valid/01_function_valid.c",
@@ -583,6 +592,42 @@
       "contains": ["Semantic analysis passed"]
     },
     {
+      "name": "a5_runtime_simple_function_call",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/runtime/09_simple_function_call.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "",
+      "expected_exit_code": 5
+    },
+    {
+      "name": "a5_runtime_function_call_with_params",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/runtime/10_function_call_with_params.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "",
+      "expected_exit_code": 5
+    },
+    {
+      "name": "a5_runtime_recursive_factorial",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/runtime/11_recursive_factorial.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "",
+      "expected_exit_code": 120
+    },
+    {
+      "name": "a5_runtime_forward_declaration",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/runtime/12_forward_declaration.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "",
+      "expected_exit_code": 5
+    },
+    {
       "name": "a5_function_return_type_mismatch",
       "assignment": 5,
       "file": "src/tests/ci/assignment_5_functions/invalid_semantic/08_function_return_type_mismatch.c",
@@ -637,6 +682,20 @@
       "file": "src/tests/ci/assignment_5_functions/invalid_semantic/17_recursive_type_mismatch.c",
       "expect": "valid_ast",
       "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a5_invalid_call_before_declaration",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/invalid_semantic/18_call_before_declaration.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]", "implicit declaration of function"]
+    },
+    {
+      "name": "a5_invalid_wrong_argument_count",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/invalid_semantic/19_wrong_argument_count.c",
+      "expect": "semantic_error",
+      "contains": ["expects 2 argument(s), got 1"]
     },
     {
       "name": "a5_missing_close_paren",

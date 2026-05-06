@@ -115,18 +115,19 @@ class SemanticAnalyzer:
             if isinstance(item, VarDeclNode):
                 self.visit(item)
 
-        # 5. Alle functie-declaraties en definities vooraf registreren.
+        # 5. Analyseer top-level items in volgorde
         for item in node.top_level_items:
+
             if isinstance(item, FunctionDeclNode):
                 self._register_function_declaration(item)
+                continue
+
             elif isinstance(item, FunctionDefNode):
                 self._register_function_definition(item)
 
-        # 6. Functie bodies analyseren.
-        for item in node.top_level_items:
-            if isinstance(item, FunctionDefNode):
                 if item.name == "main":
                     has_main = True
+
                     if item.return_type != "int" or item.return_ptr != 0:
                         self.add_error(
                             getattr(item, 'line', 0),

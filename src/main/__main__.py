@@ -132,6 +132,23 @@ def main():
     print(ast)
     print()
 
+    # ── num preprocessing ───────────────────────────────────
+    print("=== Processing enum constants ===")
+    try:
+        from parser.preprocessor.enum_processor import EnumProcessor
+
+        ast = EnumProcessor().process(ast)
+        print("? Enum processing completed")
+    except Exception as e:
+        import traceback
+        print(f"? Enum processing failed: {e}")
+        traceback.print_exc()
+    print()
+
+    print("=== AST after enum processing ===")
+    print(ast)
+    print()
+
     # ── Semantische analyse ───────────────────────────────────
     print("=== Semantic Analysis ===")
     analyzer = SemanticAnalyzer()
