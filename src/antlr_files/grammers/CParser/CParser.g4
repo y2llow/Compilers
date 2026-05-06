@@ -44,9 +44,14 @@ define_value
 // ── Typedef ───────────────────────────────────────────────────
 
 typedef_decl
-    : TYPEDEF type_spec '*'* IDENTIFIER ';'
-    | TYPEDEF struct_specifier IDENTIFIER ';'
-    | TYPEDEF enum_specifier IDENTIFIER ';'
+    : TYPEDEF type_spec '*'* typedef_name ';'
+    | TYPEDEF struct_specifier typedef_name ';'
+    | TYPEDEF enum_specifier typedef_name ';'
+    ;
+
+typedef_name
+    : IDENTIFIER
+    | INT | FLOAT_KW | CHAR_KW | VOID
     ;
 
 // ── Enum ──────────────────────────────────────────────────────
@@ -376,7 +381,7 @@ DEFINE     : 'define' ;
 LT_STDIO_H : '<stdio.h>' ;
 
 // Literals (float before int to avoid ambiguity)
-FLOAT_LIT  : [0-9]+ '.' [0-9]* | '.' [0-9]+ ;
+FLOAT_LIT  : ([0-9]+ '.' [0-9]* | '.' [0-9]+) [fF]? ;
 INTEGER    : [0-9]+ ;
 STRING_LIT : '"' ( '\\' . | ~["\\\r\n] )* '"' ;
 CHAR_LIT   : '\'' ( '\\' . | ~['\\\r\n] ) '\'' ;

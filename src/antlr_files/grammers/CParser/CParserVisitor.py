@@ -39,6 +39,11 @@ class CParserVisitor(ParseTreeVisitor):
         return self.visitChildren(ctx)
 
 
+    # Visit a parse tree produced by CParserParser#typedef_name.
+    def visitTypedef_name(self, ctx:CParserParser.Typedef_nameContext):
+        return self.visitChildren(ctx)
+
+
     # Visit a parse tree produced by CParserParser#enum_decl.
     def visitEnum_decl(self, ctx:CParserParser.Enum_declContext):
         return self.visitChildren(ctx)

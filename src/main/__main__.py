@@ -97,12 +97,26 @@ def main():
 
     # ── Include processing (mandatory) ────────────────────────
     print("=== Processing #include directives ===")
+    typedef_registry = {}  # always defined; populated by IncludeProcessor below
     try:
         from parser.preprocessor.include_handler import IncludeHandler
         from parser.preprocessor.include_processor import IncludeProcessor
 
         include_handler = IncludeHandler(args.input)
-        ast = IncludeProcessor(include_handler, source_lines).process(ast)
+
+        # Create a shared typedef registry
+        typedef_registry = {}
+
+        # Pass it to IncludeProcessor
+        include_processor = IncludeProcessor(
+            include_handler,
+            source_lines,
+            typedef_registry
+        )
+        ast = include_processor.process(ast)
+
+        if typedef_registry:
+            print(f"  Found {len(typedef_registry)} typedef(s) in includes")
 
     except Exception as e:
         print(f"⚠ Include processing skipped: {e}")
@@ -152,7 +166,7 @@ def main():
     # ── Semantische analyse ───────────────────────────────────
     print("=== Semantic Analysis ===")
     analyzer = SemanticAnalyzer()
-    analyzer.analyze(ast)
+    analyzer.analyze(ast, typedef_registry=typedef_registry)
 
     if analyzer.errors:
         error_output, error_count = analyzer.format_errors()
