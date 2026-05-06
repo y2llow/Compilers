@@ -42,7 +42,6 @@
       "expect": "valid_ast",
       "contains": ["Semantic analysis passed"]
     },
-
     {
       "name": "a1_invalid_top_level_expression",
       "assignment": 1,
@@ -114,8 +113,6 @@
       "expect": "syntax_error",
       "contains": ["[Syntax Error]"]
     },
-
-
     {
       "name": "a2_valid_types_and_variables",
       "assignment": 2,
@@ -165,7 +162,6 @@
       "expect": "valid_ast",
       "contains": ["Semantic analysis passed"]
     },
-
     {
       "name": "a2_invalid_undeclared_variable",
       "assignment": 2,
@@ -287,7 +283,6 @@
       "expect": "valid_ast",
       "contains": ["Semantic analysis passed"]
     },
-
     {
       "name": "a3_invalid_array_initializer_wrong_size",
       "assignment": 3,
@@ -358,7 +353,6 @@
       "expect": "syntax_error",
       "contains": ["[Syntax Error]"]
     },
-
     {
       "name": "a3_runtime_return_array_value",
       "assignment": 3,
@@ -494,7 +488,7 @@
       "expect": "valid_ast",
       "contains": ["Semantic analysis passed"]
     },
-        {
+    {
       "name": "a5_invalid_duplicated_definition",
       "assignment": 5,
       "file": "src/tests/ci/assignment_5_functions/invalid_semantic/01_function_duplicate_def.c",
@@ -638,7 +632,7 @@
       "name": "a5_function_param_pointer_mismatch",
       "assignment": 5,
       "file": "src/tests/ci/assignment_5_functions/invalid_semantic/10_function_param_pointer_mismatch.c",
-       "expect": "valid_ast",
+      "expect": "valid_ast",
       "contains": ["Semantic analysis passed"]
     },
     {
@@ -809,41 +803,61 @@
       "expect": "valid_ast",
       "contains": ["Semantic analysis passed"]
     },
-        {
+    {
       "name": "a5_header_no_guard",
       "assignment": 5,
       "file": "src/tests/ci/assignment_5_functions/valid/19_no_guard.c",
       "expect": "valid_ast",
-      "contains": [
-        "Semantic analysis passed"
-      ]
+      "contains": ["Semantic analysis passed"]
     },
     {
       "name": "a5_nested_calls",
       "assignment": 5,
       "file": "src/tests/ci/assignment_5_functions/valid/20_nested_include.c",
       "expect": "valid_ast",
-      "contains": [
-        "Semantic analysis passed"
-      ]
+      "contains": ["Semantic analysis passed"]
     },
     {
       "name": "a5_define_in_header",
       "assignment": 5,
       "file": "src/tests/ci/assignment_5_functions/valid/21_define_in_header.c",
       "expect": "valid_ast",
-      "contains": [
-        "Semantic analysis passed"
-      ]
+      "contains": ["Semantic analysis passed"]
     },
-        {
+    {
       "name": "a5_include_in_include",
       "assignment": 5,
-      "file": "src/tests/ci/assignment_5_functions/valid/22_include_in_include",
+      "file": "src/tests/ci/assignment_5_functions/valid/22_include_in_include.c",
       "expect": "valid_ast",
-      "contains": [
-        "Semantic analysis passed"
-      ]
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a6_valid_basic",
+      "assignment": 6,
+      "file": "src/tests/ci/assignment_6_advanced_features/valid/01_basic.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a6_valid_includes",
+      "assignment": 6,
+      "file": "src/tests/ci/assignment_6_advanced_features/valid/02_includes.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a6_valid_warning_int_float",
+      "assignment": 6,
+      "file": "src/tests/ci/assignment_6_advanced_features/valid/03_warning_int_float.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a6_invalid_name_conflict",
+      "assignment": 6,
+      "file": "src/tests/ci/assignment_6_advanced_features/invalid_semantic/01_name_conflict.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]"]
     }
   ]
 }

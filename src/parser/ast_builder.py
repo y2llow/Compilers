@@ -68,6 +68,11 @@ class ASTBuilder(CParserVisitor):
         self.source_lines = source_lines or []
         self.syntax_errors = []  # errors found during AST building
 
+        # Track typedef/struct/enum names so we can resolve the
+        # "someType* x" ambiguity (decl vs multiplication) in visitVar_decl.
+        self.known_type_names = set()
+        self.typedef_map = {}  # name -> (base_type, pointer_depth)
+
     # ?? Hulpfuncties ??????????????????????????????????????????
 
     def _get_line_col(self, ctx):
@@ -160,6 +165,9 @@ class ASTBuilder(CParserVisitor):
             existing_type = 'int'
             pointer_depth = 0
 
+        # Register so visitVar_decl can resolve the pointer ambiguity
+        self.known_type_names.add(new_name)
+        self.typedef_map[new_name] = (existing_type, pointer_depth)  # ← ADD THIS LINE
         node = TypedefNode(existing_type, pointer_depth, new_name)
         return self._attach_position(node, ctx)
 
@@ -174,6 +182,8 @@ class ASTBuilder(CParserVisitor):
         constants = []
         if ctx.enum_body():
             constants = self.visit(ctx.enum_body())
+
+        self.known_type_names.add(name)
 
         node = EnumDeclNode(name, constants)
         return self._attach_position(node, ctx)
@@ -200,6 +210,9 @@ class ASTBuilder(CParserVisitor):
         members = []
         if ctx.struct_member():
             members = [self.visit(m) for m in ctx.struct_member()]
+
+        # Register so pointer-to-struct vars can be recognised
+        self.known_type_names.add(name)
 
         node = StructDeclNode(name, members)
         return self._attach_position(node, ctx)
@@ -451,14 +464,15 @@ class ASTBuilder(CParserVisitor):
     # ?? Variable declaration ??????????????????????????????????
 
     def visitVar_decl(self, ctx):
-        """
-        var_decl:
-            CONST? type_spec CONST? '*'* IDENTIFIER
-            array_dimension* ('=' var_initializer)?
-        """
         is_const = ctx.CONST() is not None and len(ctx.CONST()) > 0
 
         type_name = ctx.type_spec().getText()
+
+        # Strip 'enum'/'struct' prefix added by ANTLR getText() concatenation
+        for prefix in ('enum', 'struct'):
+            if type_name.startswith(prefix) and len(type_name) > len(prefix):
+                type_name = type_name[len(prefix):]
+                break
 
         pointer_depth = sum(
             1 for i in range(ctx.getChildCount())
@@ -467,7 +481,24 @@ class ASTBuilder(CParserVisitor):
 
         name = ctx.IDENTIFIER().getText()
 
-        # Array dimensies
+        # Ambiguity resolution: "someType * x" could be multiplication.
+        # If the type name is not a known type AND there are stars, this is
+        # likely a multiplication expression that the grammar mis-routed.
+        # We emit a syntax error so the user gets a clear message.
+        builtin_types = {'int', 'float', 'char', 'void'}
+        if (pointer_depth > 0
+                and type_name not in builtin_types
+                and type_name not in self.known_type_names):
+            line, col = self._get_line_col(ctx)
+            self.syntax_errors.append({
+                'line': line,
+                'column': col,
+                'message': f"Unknown type '{type_name}' — did you mean a multiplication? "
+                           f"Declare typedef/struct before using it as a pointer type."
+            })
+            return None
+
+        # Array dimensions
         array_dimensions = []
         if ctx.array_dimension():
             for dim_ctx in ctx.array_dimension():

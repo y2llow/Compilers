@@ -102,7 +102,20 @@ def main():
         from parser.preprocessor.include_processor import IncludeProcessor
 
         include_handler = IncludeHandler(args.input)
-        ast = IncludeProcessor(include_handler, source_lines).process(ast)
+
+        # Create a shared typedef registry
+        typedef_registry = {}
+
+        # Pass it to IncludeProcessor
+        include_processor = IncludeProcessor(
+            include_handler,
+            source_lines,
+            typedef_registry
+        )
+        ast = include_processor.process(ast)
+
+        if typedef_registry:
+            print(f"  Found {len(typedef_registry)} typedef(s) in includes")
 
     except Exception as e:
         print(f"⚠ Include processing skipped: {e}")

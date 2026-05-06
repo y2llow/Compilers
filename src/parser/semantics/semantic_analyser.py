@@ -36,6 +36,9 @@ class SemanticAnalyzer:
         self.loop_depth = 0
         self.switch_depth = 0
         self.known_types = set()
+        self.typedef_map = {}           # Maps typedef alias -> (underlying_type_name, pointer_depth)
+        self.struct_members = {}         # Maps struct name -> list of StructMemberNode
+
 
         # name -> {
         #   'return_type': str,
@@ -154,10 +157,30 @@ class SemanticAnalyzer:
         pass
 
     def visit_TypedefNode(self, node):
+        # The new name must not clash with existing types
+        builtin_types = {'int', 'float', 'char', 'void'}
+        if (node.new_name in builtin_types
+                or node.new_name in self.known_types):
+            self.add_error(
+                getattr(node, 'line', 0),
+                getattr(node, 'column', 0),
+                f"Error: typedef name '{node.new_name}' conflicts with an existing type"
+            )
+            return
+
+        # Validate the underlying type exists
+        self._validate_type_name_str(node.existing_type, node)
+
         self.known_types.add(node.new_name)
+        self.typedef_map[node.new_name] = (node.existing_type, node.pointer_depth)
 
     def visit_StructDeclNode(self, node):
         self.known_types.add(node.name)
+        self.struct_members[node.name] = node.members
+
+        # Validate each member's type
+        for member in node.members:
+            self._validate_type_name_str(member.type_name, member)
 
     # ============================================================
     # Function registration helpers
@@ -272,6 +295,10 @@ class SemanticAnalyzer:
 
             current_value += 1
 
+    def _validate_type_name_str(self, type_name: str, node) -> bool:
+        """Same as _validate_type_name but accepts a plain string."""
+        return self._validate_type_name(type_name, node)
+
     # ============================================================
     # Functions
     # ============================================================
@@ -288,19 +315,17 @@ class SemanticAnalyzer:
         # So we just validate types but don't need to do anything else
 
     def _validate_type_name(self, type_name, node):
-        """Validate that a type name is known."""
         valid_builtin_types = {'int', 'float', 'char', 'void'}
 
         if type_name in valid_builtin_types:
             return True
 
-        # Strip 'enum' or 'struct' prefix that ANTLR getText() concatenates
-        # e.g. 'enumColor' -> 'Color', 'structPoint' -> 'Point'
+        # Strip 'enum'/'struct' prefix from ANTLR getText() concatenation
         for prefix in ('enum', 'struct'):
             if type_name.startswith(prefix) and len(type_name) > len(prefix):
                 return True
 
-        # Allow only types that were actually declared (typedef, struct, enum)
+        # Accept typedef aliases and declared struct/enum names
         if type_name in self.known_types:
             return True
 
@@ -495,20 +520,19 @@ class SemanticAnalyzer:
     # ============================================================
 
     def visit_VarDeclNode(self, node):
-
-        # Normalize type_name: ANTLR getText() on type_spec concatenates tokens,
-        # e.g. 'enum' + 'Color' -> 'enumColor'. Strip the prefix.
+        # Strip enum/struct prefix (ANTLR getText concatenates them)
         for prefix in ('enum', 'struct'):
             if node.type_name.startswith(prefix) and len(node.type_name) > len(prefix):
                 node.type_name = node.type_name[len(prefix):]
                 break
 
-        # Validate type is known
+        # Resolve typedef alias to underlying type for type-checking purposes
+        # (we keep node.type_name as the alias for display, but check the underlying type)
         self._validate_type_name(node.type_name, node)
 
         success, existing = self.symbol_table.add_symbol(
             node.name,
-            node.type_name,
+            node.type_name,  # store the alias name — that's fine
             node.pointer_depth,
             node.is_const,
             line=getattr(node, 'line', 0),
@@ -534,8 +558,10 @@ class SemanticAnalyzer:
         value_type = self._get_expression_type(node.value)
 
         if value_type is not None and success:
+            # Resolve typedef alias before type-checking assignment
+            effective_type = self._resolve_typedef(node.type_name)
             self._check_type_assignment(
-                target_type=(node.type_name, node.pointer_depth),
+                target_type=(effective_type, node.pointer_depth),
                 value_type=value_type,
                 target_name=node.name,
                 node=node
@@ -675,6 +701,24 @@ class SemanticAnalyzer:
     # Type helpers
     # ============================================================
 
+    def _resolve_typedef(self, type_name: str) -> str:
+        """
+        Follow typedef aliases to the underlying base type name.
+        e.g.  typedef int MyInt;  typedef MyInt AnotherInt;
+              _resolve_typedef('AnotherInt') -> 'int'
+        Stops at built-ins or unknown names to avoid infinite loops.
+        """
+        builtin_types = {'int', 'float', 'char', 'void'}
+        seen = set()
+        current = type_name
+        while current not in builtin_types and current not in seen:
+            seen.add(current)
+            if current in self.typedef_map:
+                current, _ = self.typedef_map[current]
+            else:
+                break
+        return current
+
     def _normalize_dimensions(self, dims):
         if dims is None:
             return []
@@ -705,11 +749,13 @@ class SemanticAnalyzer:
             if symbol is None:
                 return None
 
+            resolved_type = self._resolve_typedef(symbol.type_name)
+
             if symbol.array_dimensions:
                 dims = self._normalize_dimensions(symbol.array_dimensions)
-                return (symbol.type_name, symbol.pointer_depth, True, dims)
+                return (resolved_type, symbol.pointer_depth, True, dims)
 
-            return (symbol.type_name, symbol.pointer_depth)
+            return (resolved_type, symbol.pointer_depth)
 
         if isinstance(node, ArrayAccessNode):
             array_type = self._get_expression_type(node.array)
@@ -796,6 +842,10 @@ class SemanticAnalyzer:
 
         left_base, left_ptr = left_type[0], left_type[1]
         right_base, right_ptr = right_type[0], right_type[1]
+
+        #  Resolve typedef aliases
+        left_base = self._resolve_typedef(left_base)
+        right_base = self._resolve_typedef(right_base)
 
         if left_ptr > 0 or right_ptr > 0:
             return None
@@ -1109,7 +1159,11 @@ class SemanticAnalyzer:
             )
 
     def _check_scalar_assignment(self, target_type, value_type, target_name, node):
-        if target_type == 'int' and value_type == 'float':
+
+        target_base = self._resolve_typedef(target_type)
+        value_base = self._resolve_typedef(value_type)
+
+        if target_base == 'int' and value_base == 'float':
             self.add_warning(
                 getattr(node, 'line', 0),
                 getattr(node, 'column', 0),

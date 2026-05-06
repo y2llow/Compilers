@@ -13,11 +13,29 @@ from parser.comment_collector import CommentCollector
 
 
 class IncludeProcessor:
-    """Processes #include directives in the AST, respecting include guards."""
+    """
+    Processes #include directives in the AST, respecting include guards.
 
-    def __init__(self, include_handler, source_lines=None):
+    Can optionally maintain a shared typedef registry across included files.
+    """
+
+    def __init__(self, include_handler, source_lines=None, typedef_registry=None):
+        """
+        Parameters
+        ----------
+        include_handler : IncludeHandler
+            Handler for finding and reading include files
+        source_lines : list of str, optional
+            Source code lines for error reporting
+        typedef_registry : dict, optional
+            Shared dictionary mapping typedef name -> (base_type, pointer_depth).
+            If provided, typedefs found in included files are merged back into this dict.
+            This allows typedefs to be visible across include boundaries.
+        """
+
         self.include_handler = include_handler
         self.source_lines = source_lines or []
+        self.typedef_registry = typedef_registry if typedef_registry is not None else {}
 
     def process(self, node: ProgramNode) -> ProgramNode:
         """
@@ -28,6 +46,7 @@ class IncludeProcessor:
         - #define statements are KEPT (not removed)
         - Only LOCAL includes ("file.h") are replaced with file contents
         - Includes found inside included files are also processed (recursive)
+        - Typedefs from included files are merged into the registry
         """
         node.top_level_items = self._process_items(node.top_level_items)
         return node
@@ -102,15 +121,34 @@ class IncludeProcessor:
 
         comment_collector = CommentCollector(cc_stream, contents_lines)
         try:
-            comment_collector.collect()
-        except Exception:
-            pass
+            builder = ASTBuilder(comment_collector, contents_lines)
 
-        # Step 3: build AST from the already-complete parse tree.
-        try:
-            ast = ASTBuilder(comment_collector, contents_lines).visit(tree)
+            # SEED: Load typedefs from previously-processed includes
+            builder.known_type_names.update(self.typedef_registry.keys())
+
+            ast = builder.visit(tree)
+
+            # MERGE: Save any new typedefs back to the shared registry
+            self.typedef_registry.update(builder.known_type_names)
+            self.typedef_registry.update(builder.typedef_map)
+
         except Exception:
             return []
+
+        # Step 3: build AST from the already-complete parse tree.
+        # IMPORTANT: seed the builder's known_type_names from the shared registry
+        # so that typedefs from previously-included files are recognized.
+        try:
+            builder = ASTBuilder(comment_collector, contents_lines)
+            builder.known_type_names.update(self.typedef_registry.keys())
+            ast = builder.visit(tree)
+        except Exception:
+            return []
+
+        # IMPORTANT: merge typedefs found in this file back to the shared registry
+        # so that subsequent includes can see them.
+        self.typedef_registry.update(builder.known_type_names)
+        self.typedef_registry.update(builder.typedef_map)
 
         if isinstance(ast, ProgramNode):
             return ast.top_level_items
