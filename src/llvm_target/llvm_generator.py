@@ -10,8 +10,9 @@ from llvmlite import ir
 import llvmlite.binding as llvm
 from parser.ast_nodes import (
     ProgramNode,
-IncludeNode,
-FunctionDefNode,
+    IncludeNode,
+    FunctionDeclNode,
+    FunctionDefNode,
     ReturnNode,
     IntLiteralNode,
     FloatLiteralNode,
@@ -220,43 +221,28 @@ class LLVMGenerator:
 
     def visit_ProgramNode(self, node: ProgramNode):
         """
-        Bezoek het programma.
-
-        Nieuwe AST-structuur:
-            ProgramNode.top_level_items
-
-        Daarin kunnen includes, defines, functies, globale variabelen, etc. zitten.
-        Voor nu genereren we LLVM voor function definitions.
+        Eerst alle functies declareren, daarna bodies genereren.
+        Nodig voor forward declarations en recursive calls.
         """
+
+        # Pass 1: includes skippen, alle function declarations/definitions registreren
         for item in node.top_level_items:
             if isinstance(item, IncludeNode):
                 self._collect_comments(item)
                 continue
 
+            if isinstance(item, (FunctionDeclNode, FunctionDefNode)):
+                self._declare_function(item)
+
+        # Pass 2: alleen function definitions genereren
+        for item in node.top_level_items:
             if isinstance(item, FunctionDefNode):
                 self.visit(item)
-                continue
 
-            # Defines, typedefs, structs, enums, global vars:
-            # nog niet nodig voor assignment 1-3 LLVM.
-            continue
 
     def visit_FunctionDefNode(self, node: FunctionDefNode):
-        """
-        Genereer LLVM voor een functie.
-
-        Voor nu ondersteunen we vooral:
-            int main() { ... }
-
-        Nieuwe AST:
-            FunctionDefNode.return_type
-            FunctionDefNode.return_ptr
-            FunctionDefNode.name
-            FunctionDefNode.body.items
-        """
         self._collect_comments(node)
 
-        # Voor assignment 1-3 verwachten we vooral int main().
         if node.return_type == "int" and node.return_ptr == 0:
             return_type = ir.IntType(32)
         elif node.return_type == "float" and node.return_ptr == 0:
@@ -268,19 +254,40 @@ class LLVMGenerator:
         else:
             return_type = self._get_llvm_type(node.return_type, node.return_ptr)
 
-        # Parameters worden later uitgebreid.
-        # Voor nu: alleen functies zonder parameters betrouwbaar ondersteunen.
-        func_type = ir.FunctionType(return_type, [])
-        func = ir.Function(self.module, func_type, name=node.name)
+        # Bouw parameter types
+        param_types = []
+        for param in node.params:
+            llvm_param_type = self._get_llvm_type(
+                param.type_name,
+                param.pointer_depth
+            )
+            param_types.append(llvm_param_type)
+
+        func = self.module.globals.get(node.name)
+        if func is None:
+            func = self._declare_function(node)
 
         entry_block = func.append_basic_block(name="entry")
         self.builder = ir.IRBuilder(entry_block)
 
-        # Nieuwe body-structuur: CompoundStmtNode.items
+        # Reset lokale variabelen per functie
+        self.variables = {}
+
+        # Parameters opslaan als lokale variabelen
+        for i, arg in enumerate(func.args):
+            param = node.params[i]
+            arg.name = param.name
+
+            param_ptr = self.builder.alloca(arg.type, name=param.name)
+            self.builder.store(arg, param_ptr)
+
+            self.variables[param.name] = param_ptr
+
+        # Body genereren
         for stmt in node.body.items:
             self.visit(stmt)
 
-        # Default return als er geen expliciete return was.
+        # Default return als er geen expliciete return was
         if not entry_block.is_terminated:
             if isinstance(return_type, ir.VoidType):
                 self.builder.ret_void()
@@ -295,23 +302,15 @@ class LLVMGenerator:
     # ═══════════════════════════════════════════════════════════
 
     def visit_ReturnNode(self, node: ReturnNode):
-        """
-        Genereer een return statement.
-
-        C code:
-            return 42;
-
-        LLVM IR:
-            ret i32 42
-        """
-        # NIEUW: Collect comments
         self._collect_comments(node)
 
+        # Guard: don't emit into an already-terminated block
+        if self.builder.block.is_terminated:
+            return
+
         if node.value is None:
-            # return; (zonder waarde)
             self.builder.ret_void()
         else:
-            # return <expressie>;
             value = self.visit(node.value)
             self.builder.ret(value)
 
@@ -338,21 +337,7 @@ class LLVMGenerator:
             if node.value is not None:
                 value = self.visit(node.value)
 
-                if isinstance(llvm_type, ir.PointerType) and isinstance(value.type, ir.IntType):
-                    value = ir.Constant(llvm_type, None)
-                elif isinstance(llvm_type, ir.FloatType) and isinstance(value.type, ir.IntType):
-                    value = self.builder.sitofp(value, ir.FloatType())
-                elif isinstance(llvm_type, ir.IntType) and isinstance(value.type, ir.FloatType):
-                    value = self.builder.fptosi(value, llvm_type)
-                elif isinstance(llvm_type, ir.IntType) and isinstance(value.type, ir.IntType):
-                    if llvm_type.width != value.type.width:
-                        if llvm_type.width > value.type.width:
-                            value = self.builder.sext(value, llvm_type)
-                        else:
-                            value = self.builder.trunc(value, llvm_type)
-                elif value.type != llvm_type:
-                    # Incompatibele pointer types: bitcast (zoals GCC)
-                    value = self.builder.bitcast(value, llvm_type)
+                value = self._cast_value(value, llvm_type)
 
                 self.builder.store(value, var_ptr)
 
@@ -461,36 +446,19 @@ class LLVMGenerator:
             raise NotImplementedError("Assignment naar dit type nog niet ondersteund")
 
     def visit_IfNode(self, node: IfNode):
-        """
-        Genereer LLVM voor if statement.
-
-        C code:
-            if (x > 0) { y = 1; } else { y = 2; }
-
-        LLVM IR:
-            br i1 %cond, label %then, label %else
-            then:
-                ...
-                br label %end
-            else:
-                ...
-                br label %end
-            end:
-        """
         self._collect_comments(node)
 
-        # Evalueer conditie
-        cond = self.visit(node.condition)
+        # Guard: don't emit into an already-terminated block
+        if self.builder.block.is_terminated:
+            return
 
-        # Zet conditie om naar i1 (boolean)
+        cond = self.visit(node.condition)
         cond_bool = self.builder.icmp_signed('!=', cond, ir.Constant(ir.IntType(32), 0))
 
-        # Maak basic blocks aan
         then_block = self.builder.block.parent.append_basic_block(name="if.then")
         else_block = self.builder.block.parent.append_basic_block(name="if.else")
         end_block = self.builder.block.parent.append_basic_block(name="if.end")
 
-        # Jump naar then of else
         self.builder.cbranch(cond_bool, then_block, else_block)
 
         # Then branch
@@ -506,13 +474,20 @@ class LLVMGenerator:
         if not else_block.is_terminated:
             self.builder.branch(end_block)
 
-        # End block
+        # End block — only position here if it's reachable
         self.builder.position_at_end(end_block)
 
     def _visit_block_items(self, items):
         """Helper: bezoek alle items in een blok"""
         for item in items:
             self.visit(item)
+
+    def visit_CompoundStmtNode(self, node: CompoundStmtNode):
+        """
+        Handle a CompoundStmtNode that appears directly as a statement.
+        This happens when DCE inlines an if/while branch as its replacement.
+        """
+        self._visit_block_items(node.items)
 
     def visit_WhileNode(self, node: WhileNode):
         """While loop met break/continue support."""
@@ -1233,3 +1208,104 @@ class LLVMGenerator:
         # Roep scanf aan
         scanf = self._get_scanf()
         self.builder.call(scanf, args)
+
+    def visit_FunctionCallNode(self, node):
+        func = self.module.globals.get(node.name)
+
+        if func is None:
+            raise RuntimeError(f"Function '{node.name}' not found in LLVM module")
+
+        args = []
+
+        expected_arg_types = list(func.function_type.args)
+
+        for i, arg in enumerate(node.args):
+            value = self.visit(arg)
+
+            if i < len(expected_arg_types):
+                value = self._cast_value(value, expected_arg_types[i])
+
+            args.append(value)
+
+        return self.builder.call(func, args)
+
+    def _get_function_return_type(self, node):
+        if node.return_type == "int" and node.return_ptr == 0:
+            return ir.IntType(32)
+        elif node.return_type == "float" and node.return_ptr == 0:
+            return ir.FloatType()
+        elif node.return_type == "char" and node.return_ptr == 0:
+            return ir.IntType(8)
+        elif node.return_type == "void" and node.return_ptr == 0:
+            return ir.VoidType()
+        else:
+            return self._get_llvm_type(node.return_type, node.return_ptr)
+
+    def _get_function_param_types(self, node):
+        param_types = []
+
+        for param in node.params:
+            llvm_param_type = self._get_llvm_type(
+                param.type_name,
+                param.pointer_depth
+            )
+            param_types.append(llvm_param_type)
+
+        return param_types
+
+    def _declare_function(self, node):
+        """
+        Maakt alleen de LLVM function header aan.
+        Als de functie al bestaat, hergebruiken we die.
+        """
+
+        existing = self.module.globals.get(node.name)
+        if existing is not None:
+            return existing
+
+        return_type = self._get_function_return_type(node)
+        param_types = self._get_function_param_types(node)
+
+        func_type = ir.FunctionType(return_type, param_types)
+        return ir.Function(self.module, func_type, name=node.name)
+
+    def _cast_value(self, value, target_type):
+        """
+        Cast een LLVM value naar target_type wanneer dat nodig is.
+        Gebruikt voor assignments, variable initializers, returns en function arguments.
+        """
+
+        if value.type == target_type:
+            return value
+
+        # int -> float
+        if isinstance(value.type, ir.IntType) and isinstance(target_type, ir.FloatType):
+            return self.builder.sitofp(value, target_type)
+
+        # float -> int
+        if isinstance(value.type, ir.FloatType) and isinstance(target_type, ir.IntType):
+            return self.builder.fptosi(value, target_type)
+
+        # int -> int, bv i8 -> i32 of i32 -> i8
+        if isinstance(value.type, ir.IntType) and isinstance(target_type, ir.IntType):
+            if value.type.width < target_type.width:
+                return self.builder.sext(value, target_type)
+            if value.type.width > target_type.width:
+                return self.builder.trunc(value, target_type)
+            return value
+
+        # int -> pointer, bv int 0 naar null pointer of GCC-achtige int-to-pointer
+        if isinstance(value.type, ir.IntType) and isinstance(target_type, ir.PointerType):
+            if isinstance(value, ir.Constant) and value.constant == 0:
+                return ir.Constant(target_type, None)
+            return self.builder.inttoptr(value, target_type)
+
+        # pointer -> int
+        if isinstance(value.type, ir.PointerType) and isinstance(target_type, ir.IntType):
+            return self.builder.ptrtoint(value, target_type)
+
+        # pointer -> pointer
+        if isinstance(value.type, ir.PointerType) and isinstance(target_type, ir.PointerType):
+            return self.builder.bitcast(value, target_type)
+
+        raise TypeError(f"Cannot cast {value.type} to {target_type}")

@@ -1,5 +1,6 @@
 import sys
 import os
+
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 import argparse
 import antlr4
@@ -20,6 +21,12 @@ def main():
                             help="Path to the C source file")
     arg_parser.add_argument("--no-fold", action="store_true",
                             help="Disable constant folding")
+    arg_parser.add_argument("--no-dce", action="store_true",
+                            help="Disable dead code elimination")
+    arg_parser.add_argument("--no-dce-unused-vars", action="store_true",
+                            help="Disable unused-variable elimination (part of DCE)")
+    arg_parser.add_argument("--no-dce-dead-cond", action="store_true",
+                            help="Disable dead-conditional elimination (part of DCE)")
     arg_parser.add_argument("--render_ast", metavar="OUTPUT.dot",
                             help="Render AST to a Graphviz dot file")
     arg_parser.add_argument("--render_symb", metavar="OUTPUT.dot",
@@ -75,9 +82,70 @@ def main():
         sys.exit(1)
 
     # ── AST bouwen ────────────────────────────────────────────
-    ast = ASTBuilder(comment_collector, source_lines).visit(tree)
+    builder = ASTBuilder(comment_collector, source_lines)
+    ast = builder.visit(tree)
 
-    print("=== AST before semantic analysis ===")
+    if builder.syntax_errors:
+        for err in builder.syntax_errors:
+            print(f"{RED}[Syntax Error] line {err['line']}, column {err['column']}: {err['message']}{RESET}")
+        print(f"{RED}Compilation failed with {len(builder.syntax_errors)} syntax error(s).{RESET}")
+        sys.exit(1)
+
+    print("=== AST before include processing ===")
+    print(ast)
+    print()
+
+    # ── Include processing (mandatory) ────────────────────────
+    print("=== Processing #include directives ===")
+    try:
+        from parser.preprocessor.include_handler import IncludeHandler
+        from parser.preprocessor.include_processor import IncludeProcessor
+
+        include_handler = IncludeHandler(args.input)
+        ast = IncludeProcessor(include_handler, source_lines).process(ast)
+
+    except Exception as e:
+        print(f"⚠ Include processing skipped: {e}")
+    print()
+
+    print("=== AST after include processing ===")
+    print(ast)
+    print()
+
+    # ── #define preprocessing ──────────────────────────────────
+    print("=== Processing #define statements ===")
+    try:
+        try:
+            from parser.preprocessor.preprocessor import Preprocessor
+        except ImportError:
+            from parser.preprocessor import Preprocessor
+
+        ast = Preprocessor().preprocess(ast)
+        print("✓ Define processing completed")
+    except Exception as e:
+        import traceback
+        print(f"⚠ Preprocessor failed: {e}")
+        traceback.print_exc()
+    print()
+
+    print("=== AST after define processing ===")
+    print(ast)
+    print()
+
+    # ── num preprocessing ───────────────────────────────────
+    print("=== Processing enum constants ===")
+    try:
+        from parser.preprocessor.enum_processor import EnumProcessor
+
+        ast = EnumProcessor().process(ast)
+        print("? Enum processing completed")
+    except Exception as e:
+        import traceback
+        print(f"? Enum processing failed: {e}")
+        traceback.print_exc()
+    print()
+
+    print("=== AST after enum processing ===")
     print(ast)
     print()
 
@@ -100,9 +168,32 @@ def main():
     print()
 
     # ── Constant folding ──────────────────────────────────────
+    # Must run BEFORE dead-code elimination so that constant conditions
+    # (e.g. `if (2 - 2)`) are already reduced to integer literals by the
+    # time the DCE sees them.
     ast = ConstantFolder(enabled=not args.no_fold).visit(ast)
 
-    print("=== AST after folding ===")
+    print("=== AST after constant folding ===")
+    print(ast)
+    print()
+
+    # ── Dead code elimination ─────────────────────────────────
+    if not args.no_dce:
+        from parser.optimizations.dead_code_eliminator import DeadCodeEliminator
+
+        dce = DeadCodeEliminator(
+            unused_vars=not args.no_dce_unused_vars,
+            dead_conditionals=not args.no_dce_dead_cond,
+        )
+        ast = dce.visit(ast)
+
+        if dce.warnings:
+            print("=== Dead Code Elimination warnings ===")
+            for w in dce.warnings:
+                print(f"  {w}")
+            print()
+
+    print("=== AST after dead code elimination ===")
     print(ast)
     print()
 

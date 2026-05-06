@@ -534,6 +534,380 @@
       "contains": ["Semantic analysis passed"],
       "expected_stdout": "",
       "expected_exit_code": 100
+    },
+    {
+      "name": "a4_runtime_enum_constant",
+      "assignment": 4,
+      "file": "src/tests/ci/assignment_4_control_flow/runtime/05_enum_constant_runtime.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "2\n",
+      "expected_exit_code": 0
+    },
+    {
+      "name": "a5_valid_function_declaration",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/valid/01_function_valid.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a5_invalid_semantic_double_declaration",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/valid/02_double_declaration.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+        {
+      "name": "a5_invalid_duplicated_definition",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/invalid_semantic/01_function_duplicate_def.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]", "redefinition"]
+    },
+    {
+      "name": "a5_invalid_duplicate_definition",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/invalid_semantic/02_function_duplicate_def.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]", "redefinition"]
+    },
+    {
+      "name": "a5_invalid_argument_count",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/invalid_semantic/03_function_arg_count.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]", "expects"]
+    },
+    {
+      "name": "a5_invalid_undeclared_function",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/invalid_semantic/04_function_undeclared.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]", "implicit declaration"]
+    },
+    {
+      "name": "a5_valid_function_expression_chain",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/valid/03_function_call_expression.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a5_valid_include_define",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/valid/04_include_define.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a5_valid_string_define",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/valid/05_string_define.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a5_valid_nested_define",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/valid/06_nested_define.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a5_valid_bool_define",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/valid/07_bool_alias.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a5_invalid_conflicting_decl_definition",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/invalid_semantic/05_conflicting_declaration_definition.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]", "conflicting"]
+    },
+    {
+      "name": "a5_invalid_void_return_value",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/invalid_semantic/06_void_returns_value.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]", "void"]
+    },
+    {
+      "name": "a5_invalid_argument_type_mismatch",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/invalid_semantic/07_argument_type_mismatch.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]", "type"]
+    },
+    {
+      "name": "a5_invalid_syntax_missing_param_comma",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/invalid_syntax/01_missing_param_comma.c",
+      "expect": "syntax_error"
+    },
+    {
+      "name": "a5_runtime_recursive_factorial",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/runtime/01_recursive_factorial.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a5_runtime_simple_function_call",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/runtime/09_simple_function_call.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "",
+      "expected_exit_code": 5
+    },
+    {
+      "name": "a5_runtime_function_call_with_params",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/runtime/10_function_call_with_params.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "",
+      "expected_exit_code": 5
+    },
+    {
+      "name": "a5_runtime_recursive_factorial",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/runtime/11_recursive_factorial.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "",
+      "expected_exit_code": 120
+    },
+    {
+      "name": "a5_runtime_forward_declaration",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/runtime/12_forward_declaration.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "",
+      "expected_exit_code": 5
+    },
+    {
+      "name": "a5_function_return_type_mismatch",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/invalid_semantic/08_function_return_type_mismatch.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a5_function_param_pointer_mismatch",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/invalid_semantic/10_function_param_pointer_mismatch.c",
+       "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a5_function_const_param",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/invalid_semantic/11_function_const_param.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a5_function_array_to_scalar",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/invalid_semantic/12_function_array_to_scalar.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a5_return_value_in_void",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/invalid_semantic/13_return_value_in_void.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]", "void"]
+    },
+    {
+      "name": "a5_function_too_many_args",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/invalid_semantic/15_function_too_many_args.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]", "argument"]
+    },
+    {
+      "name": "a5_function_too_few_args",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/invalid_semantic/16_function_too_few_args.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]", "argument"]
+    },
+    {
+      "name": "a5_recursive_type_mismatch",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/invalid_semantic/17_recursive_type_mismatch.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a5_invalid_call_before_declaration",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/invalid_semantic/18_call_before_declaration.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]", "implicit declaration of function"]
+    },
+    {
+      "name": "a5_invalid_wrong_argument_count",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/invalid_semantic/19_wrong_argument_count.c",
+      "expect": "semantic_error",
+      "contains": ["expects 2 argument(s), got 1"]
+    },
+    {
+      "name": "a5_missing_close_paren",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/invalid_syntax/02_missing_close_paren.c",
+      "expect": "syntax_error",
+      "contains": ["[Syntax Error]"]
+    },
+    {
+      "name": "a5_missing_function_brace",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/invalid_syntax/03_missing_function_brace.c",
+      "expect": "syntax_error",
+      "contains": ["[Syntax Error]"]
+    },
+    {
+      "name": "a5_function_keyword_name",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/invalid_syntax/04_function_keyword_name.c",
+      "expect": "syntax_error",
+      "contains": ["[Syntax Error]"]
+    },
+    {
+      "name": "a5_function_missing_type",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/invalid_syntax/05_function_missing_type.c",
+      "expect": "syntax_error",
+      "contains": ["[Syntax Error]"]
+    },
+    {
+      "name": "a5_function_invalid_param_type",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/invalid_syntax/06_function_invalid_param_type.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]"]
+    },
+    {
+      "name": "a5_function_float_params",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/valid/08_function_float_params.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a5_function_pointer_return",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/valid/09_function_pointer_return.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a5_function_const_param",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/valid/10_function_const_param.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a5_function_declaration_before_use",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/valid/11_function_declaration_before_use.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a5_function_void_return",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/valid/12_function_void_return.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a5_function_char_param",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/valid/13_function_char_param.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a5_function_2d_array_param",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/valid/14_function_2d_array_param.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a5_function_double_pointer",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/valid/15_function_double_pointer.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a5_basic_includes",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/valid/16_basic_includes.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a5_double_include",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/valid/17_double_include.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a5_multiple_headers",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/valid/18_multiple_headers.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+        {
+      "name": "a5_header_no_guard",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/valid/19_no_guard.c",
+      "expect": "valid_ast",
+      "contains": [
+        "Semantic analysis passed"
+      ]
+    },
+    {
+      "name": "a5_nested_calls",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/valid/20_nested_include.c",
+      "expect": "valid_ast",
+      "contains": [
+        "Semantic analysis passed"
+      ]
+    },
+    {
+      "name": "a5_define_in_header",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/valid/21_define_in_header.c",
+      "expect": "valid_ast",
+      "contains": [
+        "Semantic analysis passed"
+      ]
+    },
+        {
+      "name": "a5_include_in_include",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/valid/22_include_in_include",
+      "expect": "valid_ast",
+      "contains": [
+        "Semantic analysis passed"
+      ]
     }
   ]
 }
