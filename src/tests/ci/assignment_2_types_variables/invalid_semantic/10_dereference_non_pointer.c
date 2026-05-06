@@ -1,4 +1,4 @@
 int main() {
     int x = 5;
-    returnx;
+    return *x;
 }

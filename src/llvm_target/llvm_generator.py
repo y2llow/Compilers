@@ -312,6 +312,10 @@ class LLVMGenerator:
             self.builder.ret_void()
         else:
             value = self.visit(node.value)
+
+            func_return_type = self.builder.function.function_type.return_type
+            value = self._cast_value(value, func_return_type)
+
             self.builder.ret(value)
 
     def visit_VarDeclNode(self, node: VarDeclNode):

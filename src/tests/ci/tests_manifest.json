@@ -239,7 +239,7 @@
       "contains": ["Semantic analysis passed"],
       "expected_stdout": "",
       "expected_exit_code": 7
-      },
+    },
       {
       "name": "a2_runtime_cast_float_to_int",
       "assignment": 2,
@@ -259,13 +259,13 @@
       "expected_exit_code": 65
       },
       {
-      "name": "a2_runtime_pointer_assignment_through_deref",
-      "assignment": 2,
-      "file": "src/tests/ci/assignment_2_types_variables/runtime/05_pointer_assignment_through_deref.c",
-      "expect": "runtime",
-      "contains": ["Semantic analysis passed"],
-      "expected_stdout": "",
-      "expected_exit_code": 9
+        "name": "a2_runtime_pointer_assignment_through_deref",
+        "assignment": 2,
+        "file": "src/tests/ci/assignment_2_types_variables/runtime/05_pointer_assignment_through_deref.c",
+        "expect": "runtime",
+        "contains": ["Semantic analysis passed"],
+        "expected_stdout": "",
+        "expected_exit_code": 9
       },
       {
       "name": "a2_invalid_assign_to_const",
