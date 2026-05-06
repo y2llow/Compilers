@@ -35,6 +35,7 @@ class SemanticAnalyzer:
         self.current_function_return_type = None
         self.loop_depth = 0
         self.switch_depth = 0
+        self.known_types = set()
 
         # name -> {
         #   'return_type': str,
@@ -99,25 +100,29 @@ class SemanticAnalyzer:
             if isinstance(item, IncludeNode):
                 self.visit(item)
 
-        # 2. Enum constants registreren als globale int constants.
+        # 2. Typedefs en structs registreren zodat ze als geldige types gelden.
+        for item in node.top_level_items:
+            if isinstance(item, (TypedefNode, StructDeclNode)):
+                self.visit(item)
+
+        # 3. Enum constants registreren als globale int constants.
         for item in node.top_level_items:
             if isinstance(item, EnumDeclNode):
                 self.visit(item)
 
-        # 3. Top-level variabelen registreren.
+        # 4. Top-level variabelen registreren.
         for item in node.top_level_items:
             if isinstance(item, VarDeclNode):
                 self.visit(item)
 
-        # 4. Alle functie-declaraties en definities vooraf registreren.
-        # Dit is nodig zodat function calls naar functies later in de file werken.
+        # 5. Alle functie-declaraties en definities vooraf registreren.
         for item in node.top_level_items:
             if isinstance(item, FunctionDeclNode):
                 self._register_function_declaration(item)
             elif isinstance(item, FunctionDefNode):
                 self._register_function_definition(item)
 
-        # 5. Functie bodies analyseren.
+        # 6. Functie bodies analyseren.
         for item in node.top_level_items:
             if isinstance(item, FunctionDefNode):
                 if item.name == "main":
@@ -131,7 +136,7 @@ class SemanticAnalyzer:
 
                 self.visit(item)
 
-            elif isinstance(item, (TypedefNode, StructDeclNode, DefineNode)):
+            elif isinstance(item, DefineNode):
                 pass
 
         if not has_main:
@@ -148,10 +153,10 @@ class SemanticAnalyzer:
         pass
 
     def visit_TypedefNode(self, node):
-        pass
+        self.known_types.add(node.new_name)
 
     def visit_StructDeclNode(self, node):
-        pass
+        self.known_types.add(node.name)
 
     # ============================================================
     # Function registration helpers
@@ -178,9 +183,9 @@ class SemanticAnalyzer:
 
     def _same_function_signature(self, a, b):
         return (
-            a['return_type'] == b['return_type']
-            and a['return_ptr'] == b['return_ptr']
-            and a['params'] == b['params']
+                a['return_type'] == b['return_type']
+                and a['return_ptr'] == b['return_ptr']
+                and a['params'] == b['params']
         )
 
     def _register_function_declaration(self, node):
@@ -240,6 +245,7 @@ class SemanticAnalyzer:
     # ============================================================
 
     def visit_EnumDeclNode(self, node):
+        self.known_types.add(node.name)
         current_value = 0
 
         for const in node.constants:
@@ -287,13 +293,23 @@ class SemanticAnalyzer:
         if type_name in valid_builtin_types:
             return True
 
+        # Strip 'enum' or 'struct' prefix that ANTLR getText() concatenates
+        # e.g. 'enumColor' -> 'Color', 'structPoint' -> 'Point'
+        for prefix in ('enum', 'struct'):
+            if type_name.startswith(prefix) and len(type_name) > len(prefix):
+                return True
+
+        # Allow only types that were actually declared (typedef, struct, enum)
+        if type_name in self.known_types:
+            return True
+
         self.add_error(
             getattr(node, 'line', 0),
             getattr(node, 'column', 0),
             f"Error: unknown type name '{type_name}'"
         )
         return False
-    
+
     def visit_FunctionDefNode(self, node):
         # Belangrijk:
         # NIET opnieuw registreren/checken hier.
@@ -478,6 +494,13 @@ class SemanticAnalyzer:
     # ============================================================
 
     def visit_VarDeclNode(self, node):
+
+        # Normalize type_name: ANTLR getText() on type_spec concatenates tokens,
+        # e.g. 'enum' + 'Color' -> 'enumColor'. Strip the prefix.
+        for prefix in ('enum', 'struct'):
+            if node.type_name.startswith(prefix) and len(node.type_name) > len(prefix):
+                node.type_name = node.type_name[len(prefix):]
+                break
 
         # Validate type is known
         self._validate_type_name(node.type_name, node)
@@ -1025,8 +1048,8 @@ class SemanticAnalyzer:
         if op in ('<<', '>>'):
             right = node.right
             is_negative = (
-                (isinstance(right, UnaryOpNode) and right.op == '-')
-                or (isinstance(right, IntLiteralNode) and right.value < 0)
+                    (isinstance(right, UnaryOpNode) and right.op == '-')
+                    or (isinstance(right, IntLiteralNode) and right.value < 0)
             )
 
             if is_negative:

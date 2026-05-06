@@ -82,7 +82,14 @@ def main():
         sys.exit(1)
 
     # ── AST bouwen ────────────────────────────────────────────
-    ast = ASTBuilder(comment_collector, source_lines).visit(tree)
+    builder = ASTBuilder(comment_collector, source_lines)
+    ast = builder.visit(tree)
+
+    if builder.syntax_errors:
+        for err in builder.syntax_errors:
+            print(f"{RED}[Syntax Error] line {err['line']}, column {err['column']}: {err['message']}{RESET}")
+        print(f"{RED}Compilation failed with {len(builder.syntax_errors)} syntax error(s).{RESET}")
+        sys.exit(1)
 
     print("=== AST before include processing ===")
     print(ast)

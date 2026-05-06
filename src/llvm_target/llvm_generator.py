@@ -514,6 +514,13 @@ class LLVMGenerator:
         for item in items:
             self.visit(item)
 
+    def visit_CompoundStmtNode(self, node: CompoundStmtNode):
+        """
+        Handle a CompoundStmtNode that appears directly as a statement.
+        This happens when DCE inlines an if/while branch as its replacement.
+        """
+        self._visit_block_items(node.items)
+
     def visit_WhileNode(self, node: WhileNode):
         """While loop met break/continue support."""
         self._collect_comments(node)
