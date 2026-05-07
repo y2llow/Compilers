@@ -1120,10 +1120,38 @@
       "expect": "valid_ast",
       "contains": ["Semantic analysis passed"]
     },
+        {
+      "name": "a6_struct_sem",
+      "assignment": 6,
+      "file": "src/tests/ci/assignment_6_advanced_features/valid/09_struct_sem.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+        {
+      "name": "a6_struct_ptr",
+      "assignment": 6,
+      "file": "src/tests/ci/assignment_6_advanced_features/valid/10_struct_ptr.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
     {
       "name": "a6_typedef_double",
       "assignment": 6,
       "file": "src/tests/ci/assignment_6_advanced_features/invalid_semantic/02_double.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]", "conflicts with an existing type"]
+    },
+        {
+      "name": "a6_struct_sem",
+      "assignment": 6,
+      "file": "src/tests/ci/assignment_6_advanced_features/invalid_semantic/04_struct_sem.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]", "conflicts with an existing type"]
+    },
+        {
+      "name": "a6_struct_ptr",
+      "assignment": 6,
+      "file": "src/tests/ci/assignment_6_advanced_features/invalid_semantic/05_struct_ptr.c",
       "expect": "semantic_error",
       "contains": ["[Semantic Error]", "conflicts with an existing type"]
     }
