@@ -1141,19 +1141,64 @@
       "expect": "semantic_error",
       "contains": ["[Semantic Error]", "conflicts with an existing type"]
     },
-        {
-      "name": "a6_struct_sem",
+    {
+      "name": "a6_struct_sem_invalid",
       "assignment": 6,
       "file": "src/tests/ci/assignment_6_advanced_features/invalid_semantic/04_struct_sem.c",
       "expect": "semantic_error",
       "contains": ["[Semantic Error]", "conflicts with an existing type"]
     },
-        {
-      "name": "a6_struct_ptr",
+    {
+      "name": "a6_struct_ptr_invalid",
       "assignment": 6,
       "file": "src/tests/ci/assignment_6_advanced_features/invalid_semantic/05_struct_ptr.c",
       "expect": "semantic_error",
       "contains": ["[Semantic Error]", "conflicts with an existing type"]
+    },
+    {
+      "name": "a6_runtime_typedef_basic_pointer",
+      "assignment": 6,
+      "file": "src/tests/ci/assignment_6_advanced_features/runtime/01_typedef_basic_pointer.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "",
+      "expected_exit_code": 7
+    },
+    {
+      "name": "a6_runtime_struct_basic_fields",
+      "assignment": 6,
+      "file": "src/tests/ci/assignment_6_advanced_features/runtime/02_struct_basic_fields.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "",
+      "expected_exit_code": 10
+    },
+    {
+      "name": "a6_runtime_struct_pointer_arrow",
+      "assignment": 6,
+      "file": "src/tests/ci/assignment_6_advanced_features/runtime/03_struct_pointer_arrow.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "",
+      "expected_exit_code": 13
+    },
+    {
+      "name": "a6_runtime_typedef_struct_alias",
+      "assignment": 6,
+      "file": "src/tests/ci/assignment_6_advanced_features/runtime/04_typedef_struct_alias.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "",
+      "expected_exit_code": 11
+    },
+    {
+      "name": "a6_runtime_struct_self_pointer",
+      "assignment": 6,
+      "file": "src/tests/ci/assignment_6_advanced_features/runtime/05_struct_self_pointer.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "",
+      "expected_exit_code": 4
     }
   ]
 }

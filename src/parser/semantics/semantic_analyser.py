@@ -606,9 +606,13 @@ class SemanticAnalyzer:
 
         if value_type is not None and success:
             # Resolve typedef alias before type-checking assignment
-            effective_type = self._resolve_typedef(node.type_name)
+            effective_type, effective_ptr = self._resolve_typedef_full(
+                node.type_name,
+                node.pointer_depth
+            )
+
             self._check_type_assignment(
-                target_type=(effective_type, node.pointer_depth),
+                target_type=(effective_type, effective_ptr),
                 value_type=value_type,
                 target_name=node.name,
                 node=node
@@ -810,6 +814,49 @@ class SemanticAnalyzer:
                 break
         return current
 
+    def _resolve_typedef_full(self, type_name: str, pointer_depth: int = 0):
+        """
+        Resolve typedef aliases and preserve accumulated pointer depth.
+
+        Example:
+            typedef int MyInt;
+            typedef MyInt* MyIntPtr;
+
+            _resolve_typedef_full("MyIntPtr", 0) -> ("int", 1)
+            _resolve_typedef_full("MyIntPtr", 1) -> ("int", 2)
+        """
+        builtin_types = {'int', 'float', 'char', 'void'}
+        seen = set()
+        current = type_name
+        total_pointer_depth = pointer_depth
+
+        while current not in builtin_types and current not in seen:
+            seen.add(current)
+
+            if current in self.typedef_map:
+                underlying_type, alias_pointer_depth = self.typedef_map[current]
+                current = underlying_type
+                total_pointer_depth += alias_pointer_depth
+            else:
+                break
+
+        return current, total_pointer_depth
+
+    def _normalize_type_name_for_compare(self, type_name: str) -> str:
+        """
+        Normaliseer type names voor vergelijkingen.
+
+        Voorbeeld:
+            structNode -> Node
+            Node       -> Node
+        """
+        resolved = self._resolve_typedef(type_name)
+
+        if resolved.startswith("struct") and len(resolved) > len("struct"):
+            return resolved[len("struct"):]
+
+        return resolved
+
     def _normalize_dimensions(self, dims):
         if dims is None:
             return []
@@ -840,13 +887,16 @@ class SemanticAnalyzer:
             if symbol is None:
                 return None
 
-            resolved_type = self._resolve_typedef(symbol.type_name)
+            resolved_type, resolved_ptr = self._resolve_typedef_full(
+                symbol.type_name,
+                symbol.pointer_depth
+            )
 
             if symbol.array_dimensions:
                 dims = self._normalize_dimensions(symbol.array_dimensions)
-                return (resolved_type, symbol.pointer_depth, True, dims)
+                return (resolved_type, resolved_ptr, True, dims)
 
-            return (resolved_type, symbol.pointer_depth)
+            return (resolved_type, resolved_ptr)
 
         if isinstance(node, ArrayAccessNode):
             array_type = self._get_expression_type(node.array)
@@ -970,7 +1020,11 @@ class SemanticAnalyzer:
             symbol = self.symbol_table.lookup(node.name)
             if symbol is None:
                 return None
-            return (symbol.type_name, symbol.pointer_depth)
+
+            return self._resolve_typedef_full(
+                symbol.type_name,
+                symbol.pointer_depth
+            )
 
         if isinstance(node, ArrayAccessNode):
             return self._get_expression_type(node)
@@ -1300,6 +1354,9 @@ class SemanticAnalyzer:
     def _check_pointer_assignment(self, target_type, value_type, target_name, node):
         target_base, target_ptr = target_type[0], target_type[1]
         value_base, value_ptr = value_type[0], value_type[1]
+
+        target_base = self._normalize_type_name_for_compare(target_base)
+        value_base = self._normalize_type_name_for_compare(value_base)
 
         value_node = getattr(node, 'value', None)
         if isinstance(value_node, IntLiteralNode) and value_node.value == 0:

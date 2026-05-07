@@ -11,6 +11,11 @@ import llvmlite.binding as llvm
 from parser.ast_nodes import (
     ProgramNode,
     IncludeNode,
+    TypedefNode,
+    StructDeclNode,
+    StructMemberNode,
+    MemberAccessNode,
+    PointerMemberAccessNode,
     FunctionDeclNode,
     FunctionDefNode,
     ReturnNode,
@@ -76,6 +81,10 @@ class LLVMGenerator:
 
         self.printf_func = None
         self.scanf_func = None
+
+        self.typedef_map = {}
+        self.struct_types = {}
+        self.struct_members = {}
 
     # ═══════════════════════════════════════════════════════════
     # PUBLIC API
@@ -220,12 +229,16 @@ class LLVMGenerator:
     # ═══════════════════════════════════════════════════════════
 
     def visit_ProgramNode(self, node: ProgramNode):
-        """
-        Eerst alle functies declareren, daarna bodies genereren.
-        Nodig voor forward declarations en recursive calls.
-        """
+        # Pass 0: typedefs en structs registreren vóór functies
+        for item in node.top_level_items:
+            if isinstance(item, TypedefNode):
+                self.visit(item)
 
-        # Pass 1: includes skippen, alle function declarations/definitions registreren
+        for item in node.top_level_items:
+            if isinstance(item, StructDeclNode):
+                self.visit(item)
+
+        # Pass 1: includes skippen, functies declareren
         for item in node.top_level_items:
             if isinstance(item, IncludeNode):
                 self._collect_comments(item)
@@ -234,7 +247,7 @@ class LLVMGenerator:
             if isinstance(item, (FunctionDeclNode, FunctionDefNode)):
                 self._declare_function(item)
 
-        # Pass 2: alleen function definitions genereren
+        # Pass 2: function bodies genereren
         for item in node.top_level_items:
             if isinstance(item, FunctionDefNode):
                 self.visit(item)
@@ -415,6 +428,7 @@ class LLVMGenerator:
             return self.builder.gep(base_ptr, [index], inbounds=True)
 
         raise NotImplementedError(f"Array pointer lookup not supported for {type(node)}")
+
     def visit_AssignNode(self, node: AssignNode):
         self._collect_comments(node)
 
@@ -422,21 +436,8 @@ class LLVMGenerator:
             var_ptr = self.variables[node.target.name]
             value = self.visit(node.value)
 
-            # Automatische type conversie als types niet matchen
             target_llvm_type = var_ptr.type.pointee
-            if isinstance(target_llvm_type, ir.FloatType) and isinstance(value.type, ir.IntType):
-                value = self.builder.sitofp(value, ir.FloatType())
-            elif isinstance(target_llvm_type, ir.IntType) and isinstance(value.type, ir.FloatType):
-                value = self.builder.fptosi(value, target_llvm_type)
-            elif isinstance(target_llvm_type, ir.IntType) and isinstance(value.type, ir.IntType):
-                if target_llvm_type.width != value.type.width:
-                    if target_llvm_type.width > value.type.width:
-                        value = self.builder.sext(value, target_llvm_type)
-                    else:
-                        value = self.builder.trunc(value, target_llvm_type)
-            elif value.type != target_llvm_type:
-                # Incompatibele pointer types: bitcast om door te gaan (zoals GCC)
-                value = self.builder.bitcast(value, target_llvm_type)
+            value = self._cast_value(value, target_llvm_type)
 
             self.builder.store(value, var_ptr)
 
@@ -445,20 +446,26 @@ class LLVMGenerator:
             ptr_value = self.variables[node.target.operand.name]
             ptr_loaded = self.builder.load(ptr_value)
             value = self.visit(node.value)
+            value = self._cast_value(value, ptr_loaded.type.pointee)
             self.builder.store(value, ptr_loaded)
 
-
         elif isinstance(node.target, ArrayAccessNode):
-
             elem_ptr = self._get_array_ptr(node.target)
-
             value = self.visit(node.value)
-
             value = self._cast_value(value, elem_ptr.type.pointee)
-
             self.builder.store(value, elem_ptr)
+
+
+        elif isinstance(node.target, (MemberAccessNode, PointerMemberAccessNode)):
+            field_ptr = self._get_member_ptr(node.target)
+            value = self.visit(node.value)
+            value = self._cast_value(value, field_ptr.type.pointee)
+            self.builder.store(value, field_ptr)
+
         else:
-            raise NotImplementedError("Assignment naar dit type nog niet ondersteund")
+            raise NotImplementedError(
+                f"Assignment naar dit type nog niet ondersteund: {type(node.target)}"
+            )
 
     def visit_IfNode(self, node: IfNode):
         self._collect_comments(node)
@@ -924,13 +931,34 @@ class LLVMGenerator:
         """
         Converteer C type naar LLVM type.
 
-        Examples:
-            'int', 0 -> i32
-            'float', 0 -> float
-            'int', 1 -> i32*
-            'int', 2 -> i32**
+        Ondersteunt nu ook typedef aliases:
+            typedef int MyInt;
+            MyInt x;      -> i32
+            MyInt* ptr;   -> i32*
         """
-        # Base types
+
+        # Stap 1: typedef aliases oplossen
+        # Voorbeeld:
+        #   typedef int MyInt;
+        #   self.typedef_map["MyInt"] = ("int", 0)
+        #
+        #   typedef int* IntPtr;
+        #   self.typedef_map["IntPtr"] = ("int", 1)
+        #
+        # Als je dan IntPtr* hebt, wordt dat int**:
+        #   alias_ptr_depth 1 + pointer_depth 1 = 2
+        seen = set()
+        while type_name in self.typedef_map:
+            if type_name in seen:
+                raise ValueError(f"Cyclische typedef gedetecteerd: {type_name}")
+
+            seen.add(type_name)
+
+            real_type, alias_pointer_depth = self.typedef_map[type_name]
+            type_name = real_type
+            pointer_depth += alias_pointer_depth
+
+        # Stap 2: base type bepalen
         if type_name == 'int':
             base_type = ir.IntType(32)
         elif type_name == 'float':
@@ -940,9 +968,17 @@ class LLVMGenerator:
         elif type_name == 'void':
             base_type = ir.VoidType()
         else:
-            raise ValueError(f"Onbekend type: {type_name}")
+            # Struct prefix verwijderen als die nog aanwezig is
+            struct_name = type_name
+            if struct_name.startswith("struct") and len(struct_name) > len("struct"):
+                struct_name = struct_name[len("struct"):]
 
-        # Voeg pointers toe
+            if struct_name in self.struct_types:
+                base_type = self.struct_types[struct_name]
+            else:
+                raise ValueError(f"Onbekend type: {type_name}")
+
+        # Stap 3: pointer depth toepassen
         for _ in range(pointer_depth):
             base_type = base_type.as_pointer()
 
@@ -1324,3 +1360,141 @@ class LLVMGenerator:
             return self.builder.bitcast(value, target_type)
 
         raise TypeError(f"Cannot cast {value.type} to {target_type}")
+
+    def visit_TypedefNode(self, node):
+        self.typedef_map[node.new_name] = (node.existing_type, node.pointer_depth)
+
+    def visit_StructDeclNode(self, node):
+        """
+        Registreer een C struct als LLVM identified struct type.
+
+        C:
+            struct Point {
+                int x;
+                int y;
+            };
+
+        LLVM:
+            %"struct.Point" = type { i32, i32 }
+        """
+
+        struct_name = node.name
+
+        # Als de struct al bestaat, niet opnieuw body zetten
+        if struct_name in self.struct_types:
+            return self.struct_types[struct_name]
+
+        # Eerst een opaque/identified struct maken.
+        # Dit is belangrijk voor self-referential structs:
+        # struct Node { int value; struct Node* next; };
+        llvm_struct_type = self.module.context.get_identified_type(
+            f"struct.{struct_name}"
+        )
+
+        self.struct_types[struct_name] = llvm_struct_type
+        self.struct_members[struct_name] = node.members
+
+        # Daarna pas member types bepalen.
+        member_types = []
+        for member in node.members:
+            member_type = self._get_llvm_type(
+                member.type_name,
+                member.pointer_depth
+            )
+
+            # Array member, bv char name[10]
+            if getattr(member, "array_dimensions", None):
+                for dim in reversed(member.array_dimensions):
+                    member_type = ir.ArrayType(member_type, dim)
+
+            member_types.append(member_type)
+
+        llvm_struct_type.set_body(*member_types)
+
+        return llvm_struct_type
+
+    def _get_member_ptr(self, node):
+        """
+        Geeft de LLVM pointer naar een struct member terug.
+
+        Ondersteunt:
+            p.x
+            ptr->x
+        """
+
+        # Case 1: p.x
+        if isinstance(node, MemberAccessNode):
+            if not isinstance(node.obj, IdentifierNode):
+                raise NotImplementedError("Member access op complexe expressie nog niet ondersteund")
+
+            struct_ptr = self.variables[node.obj.name]
+
+            # struct_ptr is normaal: %struct.Point*
+            struct_type = struct_ptr.type.pointee
+
+        # Case 2: ptr->x
+        elif isinstance(node, PointerMemberAccessNode):
+            # ptr->x:
+            # - als ptr een IdentifierNode is, self.visit(ptr) laadt de pointerwaarde
+            # - als ptr een MemberAccessNode is, bv a.next, self.visit(a.next) laadt ook de pointerwaarde
+            struct_ptr = self.visit(node.ptr)
+
+            if not isinstance(struct_ptr.type, ir.PointerType):
+                raise TypeError("'->' verwacht een pointer naar een struct")
+
+            struct_type = struct_ptr.type.pointee
+
+        else:
+            raise NotImplementedError(f"Member pointer lookup niet ondersteund voor {type(node)}")
+
+        # Zoek struct naam via LLVM type, bv %"struct.Point"
+        struct_name = None
+        for name, llvm_type in self.struct_types.items():
+            if llvm_type == struct_type:
+                struct_name = name
+                break
+
+        if struct_name is None:
+            raise TypeError("Kan struct type niet vinden voor member access")
+
+        members = self.struct_members[struct_name]
+
+        member_index = None
+        member_name = node.member
+
+        for i, member in enumerate(members):
+            if member.name == member_name:
+                member_index = i
+                break
+
+        if member_index is None:
+            raise TypeError(f"Struct '{struct_name}' heeft geen member '{member_name}'")
+
+        zero = ir.Constant(ir.IntType(32), 0)
+        idx = ir.Constant(ir.IntType(32), member_index)
+
+        return self.builder.gep(struct_ptr, [zero, idx], inbounds=True)
+
+    def visit_MemberAccessNode(self, node):
+        """
+        Lees een struct member.
+
+        C:
+            p.x
+
+        LLVM:
+            %fieldptr = getelementptr %struct.Point, %struct.Point* %p, i32 0, i32 0
+            %value = load i32, i32* %fieldptr
+        """
+        field_ptr = self._get_member_ptr(node)
+        return self.builder.load(field_ptr)
+
+    def visit_PointerMemberAccessNode(self, node):
+        """
+        Lees een struct member via pointer.
+
+        C:
+            ptr->x
+        """
+        field_ptr = self._get_member_ptr(node)
+        return self.builder.load(field_ptr)
