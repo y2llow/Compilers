@@ -405,13 +405,22 @@ class ASTBuilder(CParserVisitor):
 
     def visitSwitch_case(self, ctx):
         value = self.visit(ctx.expression())
-        items = [self.visit(i) for i in ctx.block_item() if self.visit(i) is not None]
+
+        items = []
+        for i in ctx.block_item():
+            item = self.visit(i)
+            if item is not None:
+                items.append(item)
 
         node = SwitchCaseNode(value, items)
         return self._attach_position(node, ctx)
 
     def visitSwitch_default(self, ctx):
-        items = [self.visit(i) for i in ctx.block_item() if self.visit(i) is not None]
+        items = []
+        for i in ctx.block_item():
+            item = self.visit(i)
+            if item is not None:
+                items.append(item)
 
         node = SwitchDefaultNode(items)
         return self._attach_position(node, ctx)

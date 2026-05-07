@@ -540,9 +540,26 @@ class SemanticAnalyzer:
 
     def visit_SwitchCaseNode(self, node):
         self._check_expression(node.value)
+
+        for item in node.items:
+            if isinstance(item, VarDeclNode):
+                self.add_error(
+                    getattr(item, 'line', 0),
+                    getattr(item, 'column', 0),
+                    "Error: variable declaration directly inside switch case is not allowed; use braces"
+                )
+
         self._visit_block_items(node.items)
 
     def visit_SwitchDefaultNode(self, node):
+        for item in node.items:
+            if isinstance(item, VarDeclNode):
+                self.add_error(
+                    getattr(item, 'line', 0),
+                    getattr(item, 'column', 0),
+                    "Error: variable declaration directly inside switch default is not allowed; use braces"
+                )
+
         self._visit_block_items(node.items)
 
     # ============================================================

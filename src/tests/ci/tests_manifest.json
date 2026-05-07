@@ -494,6 +494,16 @@
       "contains": ["[Semantic Error]", "not declared"]
     },
     {
+      "name": "a4_invalid_switch_case_declaration",
+      "assignment": 4,
+      "file": "src/tests/ci/assignment_4_control_flow/invalid_semantic/04_switch_case_declaration.c",
+      "expect": "semantic_error",
+      "contains": [
+        "[Semantic Error]",
+        "declaration directly inside switch case"
+      ]
+    },
+    {
       "name": "a4_runtime_if_simple",
       "assignment": 4,
       "file": "src/tests/ci/assignment_4_control_flow/runtime/01_if_simple.c",
@@ -537,6 +547,17 @@
       "contains": ["Semantic analysis passed"],
       "expected_stdout": "2\n",
       "expected_exit_code": 0
+    },
+    {
+      "name": "a4_runtime_switch_single_execution",
+      "assignment": 4,
+      "file": "src/tests/ci/assignment_4_control_flow/runtime/06_switch_single_execution.c",
+      "expect": "runtime",
+      "contains": [
+        "Semantic analysis passed"
+      ],
+      "expected_stdout": "",
+      "expected_exit_code": 2
     },
     {
       "name": "a5_valid_function_declaration",

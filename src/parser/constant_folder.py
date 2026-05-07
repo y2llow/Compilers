@@ -175,15 +175,23 @@ class ConstantFolder:
         return node
 
     def visit_SwitchNode(self, node: SwitchNode) -> SwitchNode:
-        node.expression = self.visit(node.expression)
+        # Bij switch is constant propagation gevaarlijk:
+        # switch-body kan variabelen aanpassen, dus we mogen niet zomaar
+        # oude constanten blijven gebruiken na de switch.
+        node.expression = self._visit_without_propagation(node.expression)
 
         old_known = self._known.copy()
 
-        node.cases = [self.visit(case) for case in node.cases]
-        if node.default is not None:
-            node.default = self.visit(node.default)
+        self._known = old_known.copy()
+        node.cases = [self._visit_without_propagation(case) for case in node.cases]
 
-        self._known = old_known
+        if node.default is not None:
+            node.default = self._visit_without_propagation(node.default)
+
+        # Na een switch weten we niet zeker welke case uitgevoerd werd,
+        # dus alle bekende constanten zijn onbetrouwbaar.
+        self._known.clear()
+
         return node
 
     def visit_SwitchCaseNode(self, node: SwitchCaseNode) -> SwitchCaseNode:
