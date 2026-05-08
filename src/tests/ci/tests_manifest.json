@@ -1003,6 +1003,20 @@
       "contains": ["[Semantic Error]", "no overload taking"]
     },
     {
+      "name": "a5_missing_return_path",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/invalid_semantic/27_missing_return_path.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]", "not all control paths"]
+    },
+        {
+      "name": "a5_missing_return_nested",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/invalid_semantic/28_missing_return_nested_if.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]", "not all control paths"]
+    },
+    {
       "name": "a5_overload_with_pointer",
       "assignment": 5,
       "file": "src/tests/ci/assignment_5_functions/runtime/27_overload_with_pointer.c",
@@ -1019,6 +1033,15 @@
       "contains": ["Semantic analysis passed"],
       "expected_stdout": "",
       "expected_exit_code": 15
+    },
+        {
+      "name": "a5_all_paths_return_after_if",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/runtime/29_all_paths_return_after_if.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "",
+      "expected_exit_code": 3
     },
     {
       "name": "a5_nested_calls",
@@ -1038,6 +1061,13 @@
       "name": "a5_include_in_include",
       "assignment": 5,
       "file": "src/tests/ci/assignment_5_functions/valid/22_include_in_include.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a5_all_paths_return_if_else",
+      "assignment": 5,
+      "file": "src/tests/ci/assignment_5_functions/valid/23_all_paths_return_if_else.c",
       "expect": "valid_ast",
       "contains": ["Semantic analysis passed"]
     },

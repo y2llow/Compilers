@@ -553,6 +553,86 @@ class SemanticAnalyzer:
     # Enum
     # ============================================================
 
+    def _block_always_returns(self, items):
+        """
+        Return True als elk uitvoerbaar pad door deze block eindigt in een return.
+
+        Conservatieve analyse:
+        - return statement => gegarandeerd return
+        - if/else => alleen gegarandeerd als then én else gegarandeerd returnen
+        - compound block => kijk recursief
+        - loops worden standaard niet als gegarandeerd beschouwd,
+          behalve simpele while(1) / while(nonzero-int) met body die altijd returnt.
+        """
+
+        for stmt in items:
+            if self._statement_always_returns(stmt):
+                return True
+
+        return False
+
+    def _statement_always_returns(self, stmt):
+        """
+        Return True als deze statement gegarandeerd een return uitvoert.
+        """
+
+        if isinstance(stmt, ReturnNode):
+            return True
+
+        if isinstance(stmt, CompoundStmtNode):
+            return self._block_always_returns(stmt.items)
+
+        if isinstance(stmt, IfNode):
+            # Zonder else is er altijd een pad zonder return.
+            if stmt.else_body is None:
+                return False
+
+            then_returns = self._statement_always_returns(stmt.then_body)
+            else_returns = self._statement_always_returns(stmt.else_body)
+
+            return then_returns and else_returns
+
+        if isinstance(stmt, WhileNode):
+            # Alleen heel eenvoudige infinite loops als gegarandeerd tellen:
+            # while (1) { return ...; }
+            if isinstance(stmt.condition, IntLiteralNode) and stmt.condition.value != 0:
+                return self._statement_always_returns(stmt.body)
+
+            return False
+
+        if isinstance(stmt, ForNode):
+            # for(;;) wordt soms gebruikt als infinite loop.
+            # Alleen als condition ontbreekt en body altijd returnt.
+            if stmt.condition is None:
+                return self._statement_always_returns(stmt.body)
+
+            return False
+
+        if isinstance(stmt, SwitchNode):
+            return self._switch_always_returns(stmt)
+
+        return False
+
+    def _switch_always_returns(self, stmt):
+        """
+        Conservatieve switch-check:
+        switch returnt gegarandeerd alleen als:
+        - er een default is
+        - elke case block altijd returnt
+        - default block altijd returnt
+
+        Dit negeert complexe fallthrough-logica bewust.
+        """
+
+        if stmt.default is None:
+            return False
+
+        for case in stmt.cases:
+            if not self._block_always_returns(case.items):
+                return False
+
+        return self._block_always_returns(stmt.default.items)
+
     def visit_EnumDeclNode(self, node):
         self.known_types.add(node.name)
         current_value = 0
@@ -658,6 +738,16 @@ class SemanticAnalyzer:
                 )
 
         self._visit_block_items(node.body.items)
+
+        # Optional feature:
+        # Check that all paths in non-void functions end with a return statement.
+        if node.return_type != "void" or node.return_ptr != 0:
+            if not self._block_always_returns(node.body.items):
+                self.add_error(
+                    getattr(node, 'line', 0),
+                    getattr(node, 'column', 0),
+                    f"Error: not all control paths in function '{node.name}' return a value"
+                )
 
         self.symbol_table.pop_scope()
         self.current_function_return_type = old_return_type
