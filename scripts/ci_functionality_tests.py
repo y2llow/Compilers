@@ -9,7 +9,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-MANIFEST_PATH = ROOT / "src/tests/ci/tests_manifest.json"
+MANIFEST_PATH = ROOT / "src/tests/functionality/tests_manifest.json"
 OUT_DIR = ROOT / ".ci_out"
 
 
