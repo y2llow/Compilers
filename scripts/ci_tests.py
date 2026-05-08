@@ -10,7 +10,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST_PATH = ROOT / "src/tests/ci/tests_manifest.json"
-OUT_DIR = ROOT / ".ci_out"
+OUT_DIR = ROOT / "bin_target/.ci_out"
 
 
 GREEN = "\033[92m"

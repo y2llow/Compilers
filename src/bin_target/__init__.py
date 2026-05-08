@@ -1,1 +1,0 @@
-# code that translates the LLVM IR into binary

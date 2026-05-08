@@ -2360,6 +2360,48 @@
       "file": "src/tests/functionality/assignment_6_advanced_features/optional/09_optional_union_arrow_on_non_pointer.c",
       "expect": "semantic_error",
       "contains": ["[Semantic Error]", "non-pointer"]
+    },
+        {
+      "name": "a5_demo_ast_01_nested_recursion_arrays",
+      "assignment": 5,
+      "file": "src/tests/functionality/show_tests/01_ast_nested_recursion_arrays.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a5_demo_ast_02_pointer_reference_global_blocks",
+      "assignment": 5,
+      "file": "src/tests/functionality/show_tests/02_ast_pointer_reference_global_blocks.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a5_demo_symbol_01_shadowing_deep_scopes",
+      "assignment": 5,
+      "file": "src/tests/functionality/show_tests/03_symbol_table_shadowing_deep_scopes.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a5_demo_symbol_02_functions_forward_pointer_params",
+      "assignment": 5,
+      "file": "src/tests/functionality/show_tests/04_symbol_table_functions_forward_pointer_params.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a5_demo_optimisation_01_after_return_dead_code_ast",
+      "assignment": 5,
+      "file": "src/tests/functionality/show_tests/05_optimisation_ast_after_return_dead_code.c",
+      "expect": "valid_ast",
+      "contains": ["Dead Code Elimination", "AST after dead code elimination"]
+    },
+    {
+      "name": "a5_demo_optimisation_02_break_continue_pruning_ast",
+      "assignment": 5,
+      "file": "src/tests/functionality/show_tests/06_optimisation_ast_break_continue_pruning.c",
+      "expect": "valid_ast",
+      "contains": ["AST after dead code elimination"]
     }
   ]
 }
