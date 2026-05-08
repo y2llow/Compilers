@@ -122,15 +122,10 @@ def _collect_used_names(node: ASTNode, out: set[str]) -> None:
 
     # ── Declarations / assignments ────────────────────────────────────────
     if isinstance(node, VarDeclNode):
-        # Do NOT add node.name here – that is the variable being declared,
-        # not a use.  But DO visit the initialiser.
         _collect_used_names(node.value, out)
         return
 
     if isinstance(node, AssignNode):
-        # The target is being written to; only an identifier on the *right*
-        # side counts as a read.  However, array-index and dereference
-        # sub-expressions inside the target do count.
         _collect_target_reads(node.target, out)
         _collect_used_names(node.value, out)
         return
@@ -271,14 +266,10 @@ def _collect_target_reads(target: ASTNode, out: set[str]) -> None:
     For ``s.m = …`` / ``p->m = …``, the base object/pointer is read.
     """
     if isinstance(target, IdentifierNode):
-        # Even though this is a write, we must keep the declaration alive
-        # unless we also remove the assignment itself. Otherwise DCE can remove
-        # `int x = ...;` but leave `x = ...;`, causing LLVM codegen to fail.
         out.add(target.name)
         return
 
     if isinstance(target, ArrayAccessNode):
-        # The array base (even if an identifier) is read as a pointer.
         _collect_used_names(target.array, out)
         _collect_used_names(target.index, out)
         return
@@ -396,19 +387,14 @@ class DeadCodeEliminator:
     # ──────────────────────────────────────────────────────────────────────
 
     def visit_CompoundStmtNode(self, node: CompoundStmtNode) -> CompoundStmtNode:
-        # 1. Recurse into children first (deepest blocks cleaned up first).
         visited: list[ASTNode | None] = []
         for item in node.items:
             if item is None:
                 continue
             result = self.visit(item)
-            # visit() may return None when a node is completely eliminated
-            # (e.g. an unused VarDeclNode with no initialiser side-effects,
-            # or a dead while loop).
             if result is not None:
                 visited.append(result)
 
-        # 2. Mandatory: trim after the first unconditional terminator.
         visited, _ = _trim_after_terminator(visited)
 
         node.items = visited
@@ -435,11 +421,6 @@ class DeadCodeEliminator:
                 )
                 return None  # drop the declaration entirely
             else:
-                # The initialiser has side-effects (function call, etc.).
-                # Keep the statement but turn the declaration into just the
-                # expression by … well, we can't do that cleanly in the AST
-                # without an ExprStmtNode.  So we keep the whole VarDeclNode.
-                # At minimum we emit a warning.
                 self.warnings.append(
                     f"[DCE] line {node.line}: unused variable '{node.name}' "
                     f"kept because its initialiser may have side-effects"
@@ -608,12 +589,9 @@ def _is_pure(node: ASTNode | None) -> bool:
                 and _is_pure(node.else_expr))
 
     if isinstance(node, AddressOfNode):
-        return True  # just takes an address, no side-effect
+        return True
 
     if isinstance(node, ArrayInitializerNode):
         return all(_is_pure(e) for e in node.elements)
 
-    # Anything with a write or unknown side-effect is impure.
-    # This includes: FunctionCallNode, IncrementNode, DecrementNode,
-    # AssignNode, PrintfNode, ScanfNode, DereferenceNode (may trap), …
     return False

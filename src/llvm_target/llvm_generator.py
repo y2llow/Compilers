@@ -131,9 +131,6 @@ class LLVMGenerator:
         self.union_types = {}
         self.union_members = {}
 
-        # Original source name -> list of LLVM overload declarations.
-        # LLVM itself cannot contain multiple globals named @add, so overloaded
-        # source functions are emitted as e.g. @add__int__int.
         self.function_overloads = {}
 
     # ═══════════════════════════════════════════════════════════
@@ -239,7 +236,6 @@ class LLVMGenerator:
                 info = self.line_to_comment[stmt_line]
 
                 # Build complete comment: source + all leading comments
-                # NOTE: source_line already contains inline comments!
                 comment_parts = [info['source']]
                 for lead in info['leading']:
                     comment_parts.append(f'// {lead}')
@@ -1185,9 +1181,6 @@ class LLVMGenerator:
             seen.add(type_name)
 
             real_type, alias_pointer_depth = self.typedef_map[type_name]
-            # Protect against:
-            #   typedef struct Point Point;
-            #   typedef union Number Number;
             if real_type == type_name:
                 break
 
@@ -1206,9 +1199,6 @@ class LLVMGenerator:
         else:
             aggregate_name = type_name
 
-            # Strip prefixes from ANTLR getText:
-            #   structPacket -> Packet
-            #   unionNumber  -> Number
             for prefix in ("struct", "union"):
                 if aggregate_name.startswith(prefix) and len(aggregate_name) > len(prefix):
                     aggregate_name = aggregate_name[len(prefix):]
@@ -1703,12 +1693,6 @@ class LLVMGenerator:
         raise TypeError(f"Cannot cast {value.type} to {target_type}")
 
     def visit_TypedefNode(self, node):
-        # C allows:
-        #   typedef struct Point Point;
-        #   typedef union Number Number;
-        #
-        # In your AST this becomes Typedef(Point -> Point).
-        # Do not store self-aliases, otherwise _get_llvm_type gets Point -> Point -> cycle.
         if node.new_name == node.existing_type:
             return
 
