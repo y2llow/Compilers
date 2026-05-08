@@ -47,6 +47,46 @@ from parser.ast_nodes import (
 )
 
 
+class ScopedVariableTable:
+    """
+    Small scoped variable table for LLVM codegen.
+
+    Needed for C scopes:
+        int x = 1;
+        {
+            int x = 5;
+        }
+        return x;  // must return outer x
+    """
+
+    def __init__(self):
+        self.scopes = [{}]
+
+    def push_scope(self):
+        self.scopes.append({})
+
+    def pop_scope(self):
+        if len(self.scopes) > 1:
+            self.scopes.pop()
+
+    def __setitem__(self, name, value):
+        self.scopes[-1][name] = value
+
+    def __getitem__(self, name):
+        for scope in reversed(self.scopes):
+            if name in scope:
+                return scope[name]
+        raise KeyError(name)
+
+    def __contains__(self, name):
+        return any(name in scope for scope in reversed(self.scopes))
+
+    def get(self, name, default=None):
+        try:
+            return self[name]
+        except KeyError:
+            return default
+
 class LLVMGenerator:
     """
     Genereert LLVM IR code uit een AST.
@@ -69,7 +109,7 @@ class LLVMGenerator:
         self.builder = None
 
         # Symbol table: variabele naam -> LLVM waarde
-        self.variables = {}
+        self.variables = ScopedVariableTable()
 
         # Maps: line_number -> {'source': str, 'leading': list, 'inline': str}
         self.line_to_comment = {}
@@ -290,7 +330,7 @@ class LLVMGenerator:
         self.builder = ir.IRBuilder(entry_block)
 
         # Reset lokale variabelen per functie
-        self.variables = {}
+        self.variables = ScopedVariableTable()
 
         # Parameters opslaan als lokale variabelen
         for i, arg in enumerate(func.args):
@@ -491,14 +531,14 @@ class LLVMGenerator:
 
         # Then branch
         self.builder.position_at_end(then_block)
-        self._visit_block_items(node.then_body.items)
+        self.visit(node.then_body)
         if not then_block.is_terminated:
             self.builder.branch(end_block)
 
         # Else branch
         self.builder.position_at_end(else_block)
         if node.else_body is not None:
-            self._visit_block_items(node.else_body.items)
+            self.visit(node.else_body)
         if not else_block.is_terminated:
             self.builder.branch(end_block)
 
@@ -512,10 +552,16 @@ class LLVMGenerator:
 
     def visit_CompoundStmtNode(self, node: CompoundStmtNode):
         """
-        Handle a CompoundStmtNode that appears directly as a statement.
-        This happens when DCE inlines an if/while branch as its replacement.
+        Anonymous scope: { ... }
+
+        Variables declared inside this block must not overwrite variables
+        with the same name in an outer scope.
         """
-        self._visit_block_items(node.items)
+        self.variables.push_scope()
+        try:
+            self._visit_block_items(node.items)
+        finally:
+            self.variables.pop_scope()
 
     def visit_WhileNode(self, node: WhileNode):
         """While loop met break/continue support."""
@@ -536,7 +582,7 @@ class LLVMGenerator:
         self.builder.cbranch(cond_bool, body_block, end_block)
 
         self.builder.position_at_end(body_block)
-        self._visit_block_items(node.body.items)
+        self.visit(node.body)
         if not body_block.is_terminated:
             self.builder.branch(cond_block)
 
@@ -572,7 +618,7 @@ class LLVMGenerator:
             self.builder.branch(body_block)
 
         self.builder.position_at_end(body_block)
-        self._visit_block_items(node.body.items)
+        self.visit(node.body)
         if not body_block.is_terminated:
             self.builder.branch(update_block)
 

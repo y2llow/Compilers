@@ -122,11 +122,33 @@ class ConstantFolder:
         return node
 
     def visit_CompoundStmtNode(self, node: CompoundStmtNode) -> CompoundStmtNode:
+        """
+        Visit a block scope.
+
+        Important:
+            int x = 1;
+            {
+                int x = 5;
+                x = x + 1;
+            }
+            return x;
+
+        The inner x must not poison constant propagation for the outer x.
+        Therefore we clear known constants after leaving a compound scope.
+
+        This is conservative: it may miss some constant propagation opportunities,
+        but it avoids incorrect code generation.
+        """
         node.items = [
             self.visit(item)
             for item in node.items
             if item is not None
         ]
+
+        # Leaving a block invalidates constant knowledge because variables may
+        # have been shadowed or outer variables may have been modified.
+        self._known.clear()
+
         return node
 
     # ------------------------------------------------------------

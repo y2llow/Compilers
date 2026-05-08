@@ -271,7 +271,10 @@ def _collect_target_reads(target: ASTNode, out: set[str]) -> None:
     For ``s.m = …`` / ``p->m = …``, the base object/pointer is read.
     """
     if isinstance(target, IdentifierNode):
-        # The name itself is being written, not read.
+        # Even though this is a write, we must keep the declaration alive
+        # unless we also remove the assignment itself. Otherwise DCE can remove
+        # `int x = ...;` but leave `x = ...;`, causing LLVM codegen to fail.
+        out.add(target.name)
         return
 
     if isinstance(target, ArrayAccessNode):
