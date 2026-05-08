@@ -349,11 +349,24 @@ class DeadCodeEliminator:
     # ──────────────────────────────────────────────────────────────────────
 
     def visit_ProgramNode(self, node: ProgramNode) -> ProgramNode:
-        node.top_level_items = [
-            self.visit(item)
-            for item in node.top_level_items
-            if item is not None
-        ]
+        new_items = []
+
+        for item in node.top_level_items:
+            if item is None:
+                continue
+
+            # Belangrijk: top-level VarDeclNode = global variable.
+            # Die mogen we niet verwijderen met unused-var DCE,
+            # want ze kunnen gebruikt worden in functies.
+            if isinstance(item, VarDeclNode):
+                new_items.append(item)
+                continue
+
+            result = self.visit(item)
+            if result is not None:
+                new_items.append(result)
+
+        node.top_level_items = new_items
         return node
 
     # ──────────────────────────────────────────────────────────────────────

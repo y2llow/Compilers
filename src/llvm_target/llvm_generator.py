@@ -110,6 +110,7 @@ class LLVMGenerator:
 
         # Symbol table: variabele naam -> LLVM waarde
         self.variables = ScopedVariableTable()
+        self.global_variables = {}
 
         # Maps: line_number -> {'source': str, 'leading': list, 'inline': str}
         self.line_to_comment = {}
@@ -282,6 +283,11 @@ class LLVMGenerator:
         for item in node.top_level_items:
             if isinstance(item, StructDeclNode):
                 self.visit(item)
+
+        # Pass 0.5: globale variabelen declareren
+        for item in node.top_level_items:
+            if isinstance(item, VarDeclNode):
+                self._declare_global_var(item)
 
         # Pass 1: includes skippen, functies declareren
         for item in node.top_level_items:
@@ -479,7 +485,7 @@ class LLVMGenerator:
         self._collect_comments(node)
 
         if isinstance(node.target, IdentifierNode):
-            var_ptr = self.variables[node.target.name]
+            var_ptr = self._lookup_var_ptr(node.target.name)
             value = self.visit(node.value)
 
             target_llvm_type = var_ptr.type.pointee
@@ -838,7 +844,7 @@ class LLVMGenerator:
         LLVM IR:
             %1 = load i32, i32* %x
         """
-        var_ptr = self.variables[node.name]
+        var_ptr = self._lookup_var_ptr(node.name)
         # Als het een array is, geef pointer naar eerste element (geen load)
         if isinstance(var_ptr.type.pointee, ir.ArrayType):
             zero = ir.Constant(ir.IntType(32), 0)
@@ -1169,7 +1175,7 @@ class LLVMGenerator:
 
         # &x
         if isinstance(operand, IdentifierNode):
-            return self.variables[operand.name]
+            return self._lookup_var_ptr(operand.name)
 
         # &arr[i]
         if isinstance(operand, ArrayAccessNode):
@@ -1735,3 +1741,93 @@ class LLVMGenerator:
         """
         field_ptr = self._get_member_ptr(node)
         return self.builder.load(field_ptr)
+
+    def _lookup_var_ptr(self, name):
+        """
+        Zoek eerst lokale variabele, daarna globale variabele.
+        """
+        local = self.variables.get(name)
+        if local is not None:
+            return local
+
+        if name in self.global_variables:
+            return self.global_variables[name]
+
+        raise KeyError(name)
+
+    def _const_initializer_for_global(self, node, llvm_type):
+        """
+        Maak een constante initializer voor globale variabelen.
+
+        Voor deadline 1 houden we dit bewust simpel:
+            int g = 5;
+            float f = 2.5;
+            char c = 'A';
+            int* p = 0;
+        """
+        if node is None:
+            return ir.Constant(llvm_type, None)
+
+        if isinstance(node, IntLiteralNode):
+            if isinstance(llvm_type, ir.PointerType):
+                if node.value == 0:
+                    return ir.Constant(llvm_type, None)
+                return ir.Constant(llvm_type, None)
+
+            return ir.Constant(llvm_type, node.value)
+
+        if isinstance(node, FloatLiteralNode):
+            return ir.Constant(llvm_type, node.value)
+
+        # CharLiteralNode is al geïmporteerd bij jullie normaal.
+        # Als deze naam nog niet bestaat in imports, voeg CharLiteralNode toe.
+        if isinstance(node, CharLiteralNode):
+            value = node.value
+            escape_map = {
+                '\\n': 10,
+                '\\t': 9,
+                '\\r': 13,
+                '\\0': 0,
+                '\\\\': 92,
+                "\\'": 39,
+                '\\"': 34,
+            }
+            char_val = escape_map.get(value, ord(value[0]) if value else 0)
+            return ir.Constant(llvm_type, char_val)
+
+        # Fallback: zero/null initializer
+        return ir.Constant(llvm_type, None)
+
+    def _declare_global_var(self, node: VarDeclNode):
+        """
+        Genereer LLVM global variable voor top-level declarations.
+
+        C:
+            int g = 5;
+
+        LLVM:
+            @g = global i32 5
+        """
+        if node.name in self.global_variables:
+            return self.global_variables[node.name]
+
+        llvm_type = self._get_llvm_type(node.type_name, node.pointer_depth)
+
+        # Voor nu: scalar globals. Arrays kunnen later apart als nodig.
+        if node.array_dimensions:
+            array_type = llvm_type
+            for dim in reversed(node.array_dimensions):
+                array_type = ir.ArrayType(array_type, dim)
+            llvm_type = array_type
+
+        global_var = ir.GlobalVariable(self.module, llvm_type, name=node.name)
+        global_var.linkage = "common" if node.value is None else "internal"
+        global_var.global_constant = False
+
+        if node.array_dimensions:
+            global_var.initializer = ir.Constant(llvm_type, None)
+        else:
+            global_var.initializer = self._const_initializer_for_global(node.value, llvm_type)
+
+        self.global_variables[node.name] = global_var
+        return global_var
