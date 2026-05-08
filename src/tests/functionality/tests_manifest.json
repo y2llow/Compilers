@@ -2090,6 +2090,203 @@
       ],
       "expected_exit_code": 5,
       "expected_stdout": ""
+    },
+    {
+      "name": "a6_valid_01_mandatory_typedef_basic",
+      "assignment": 6,
+      "file": "src/tests/functionality/assignment_6_advanced_features/valid/01_mandatory_typedef_basic.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a6_valid_02_mandatory_typedef_struct_integration",
+      "assignment": 6,
+      "file": "src/tests/functionality/assignment_6_advanced_features/valid/02_mandatory_typedef_struct_integration.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a6_valid_03_mandatory_struct_dot_access",
+      "assignment": 6,
+      "file": "src/tests/functionality/assignment_6_advanced_features/valid/03_mandatory_struct_dot_access.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a6_valid_04_mandatory_struct_self_pointer",
+      "assignment": 6,
+      "file": "src/tests/functionality/assignment_6_advanced_features/valid/04_mandatory_struct_self_pointer.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a6_valid_05_mandatory_struct_mixed_members",
+      "assignment": 6,
+      "file": "src/tests/functionality/assignment_6_advanced_features/valid/05_mandatory_struct_mixed_members.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a6_valid_06_mandatory_struct_arrow_access",
+      "assignment": 6,
+      "file": "src/tests/functionality/assignment_6_advanced_features/valid/06_mandatory_struct_arrow_access.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a6_valid_07_mandatory_struct_pointer_int_warning",
+      "assignment": 6,
+      "file": "src/tests/functionality/assignment_6_advanced_features/valid/07_mandatory_struct_pointer_int_warning.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic Warning", "Semantic analysis passed"]
+    },
+    {
+      "name": "a6_runtime_01_mandatory_typedef_basic_pointer",
+      "assignment": 6,
+      "file": "src/tests/functionality/assignment_6_advanced_features/runtime/01_runtime_typedef_basic_pointer.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "",
+      "expected_exit_code": 7
+    },
+    {
+      "name": "a6_runtime_02_mandatory_struct_basic_fields",
+      "assignment": 6,
+      "file": "src/tests/functionality/assignment_6_advanced_features/runtime/02_runtime_struct_basic_fields.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "",
+      "expected_exit_code": 10
+    },
+    {
+      "name": "a6_runtime_03_mandatory_struct_pointer_arrow",
+      "assignment": 6,
+      "file": "src/tests/functionality/assignment_6_advanced_features/runtime/03_runtime_struct_pointer_arrow.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "",
+      "expected_exit_code": 13
+    },
+    {
+      "name": "a6_runtime_04_mandatory_typedef_struct_alias",
+      "assignment": 6,
+      "file": "src/tests/functionality/assignment_6_advanced_features/runtime/04_runtime_typedef_struct_alias.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "",
+      "expected_exit_code": 11
+    },
+    {
+      "name": "a6_runtime_05_mandatory_struct_self_pointer",
+      "assignment": 6,
+      "file": "src/tests/functionality/assignment_6_advanced_features/runtime/05_runtime_struct_self_pointer.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "",
+      "expected_exit_code": 4
+    },
+    {
+      "name": "a6_runtime_06_mandatory_struct_array_field",
+      "assignment": 6,
+      "file": "src/tests/functionality/assignment_6_advanced_features/runtime/06_runtime_struct_array_field.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "",
+      "expected_exit_code": 12
+    },
+    {
+      "name": "a6_runtime_07_mandatory_struct_enum_field",
+      "assignment": 6,
+      "file": "src/tests/functionality/assignment_6_advanced_features/runtime/07_runtime_struct_enum_field.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "",
+      "expected_exit_code": 8
+    },
+    {
+      "name": "a6_runtime_08_mandatory_struct_pointer_field",
+      "assignment": 6,
+      "file": "src/tests/functionality/assignment_6_advanced_features/runtime/08_runtime_struct_pointer_field.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "",
+      "expected_exit_code": 9
+    },
+    {
+      "name": "a6_runtime_09_mandatory_typedef_struct_alias_direct",
+      "assignment": 6,
+      "file": "src/tests/functionality/assignment_6_advanced_features/runtime/09_runtime_typedef_struct_alias_direct.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "",
+      "expected_exit_code": 13
+    },
+    {
+      "name": "a6_runtime_10_mandatory_array_of_structs",
+      "assignment": 6,
+      "file": "src/tests/functionality/assignment_6_advanced_features/runtime/10_runtime_array_of_structs.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "33",
+      "expected_exit_code": 0
+    },
+    {
+      "name": "a6_runtime_11_mandatory_array_of_structs_nested",
+      "assignment": 6,
+      "file": "src/tests/functionality/assignment_6_advanced_features/runtime/11_runtime_array_of_structs_nested.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "40",
+      "expected_exit_code": 0
+    },
+    {
+      "name": "a6_invalid_semantic_01_mandatory_typedef_builtin_name_conflict",
+      "assignment": 6,
+      "file": "src/tests/functionality/assignment_6_advanced_features/invalid_semantic/01_mandatory_typedef_builtin_name_conflict.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]"]
+    },
+    {
+      "name": "a6_invalid_semantic_02_mandatory_typedef_redefinition",
+      "assignment": 6,
+      "file": "src/tests/functionality/assignment_6_advanced_features/invalid_semantic/02_mandatory_typedef_redefinition.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]"]
+    },
+    {
+      "name": "a6_invalid_semantic_03_mandatory_struct_invalid_member",
+      "assignment": 6,
+      "file": "src/tests/functionality/assignment_6_advanced_features/invalid_semantic/03_mandatory_struct_invalid_member.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]", "has no member"]
+    },
+    {
+      "name": "a6_invalid_semantic_04_mandatory_struct_unknown_member",
+      "assignment": 6,
+      "file": "src/tests/functionality/assignment_6_advanced_features/invalid_semantic/04_mandatory_struct_unknown_member.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]", "has no member"]
+    },
+    {
+      "name": "a6_invalid_semantic_05_mandatory_member_access_non_struct",
+      "assignment": 6,
+      "file": "src/tests/functionality/assignment_6_advanced_features/invalid_semantic/05_mandatory_member_access_non_struct.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]", "not a struct"]
+    },
+    {
+      "name": "a6_invalid_semantic_06_mandatory_arrow_on_non_pointer",
+      "assignment": 6,
+      "file": "src/tests/functionality/assignment_6_advanced_features/invalid_semantic/06_mandatory_arrow_on_non_pointer.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]", "non-pointer"]
+    },
+    {
+      "name": "a6_invalid_semantic_07_mandatory_nested_struct_missing_member",
+      "assignment": 6,
+      "file": "src/tests/functionality/assignment_6_advanced_features/invalid_semantic/07_mandatory_nested_struct_missing_member.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]", "has no member"]
     }
   ]
 }
