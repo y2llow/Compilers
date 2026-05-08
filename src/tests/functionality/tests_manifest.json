@@ -1,137 +1,303 @@
 {
   "tests": [
-    {
+  {
   "name": "a1_valid_binary_arithmetic",
   "assignment": 1,
   "file": "src/tests/functionality/assignment_1_expressions/valid/01_binary_arithmetic.c",
   "expect": "valid_ast",
   "contains": ["Semantic analysis passed"]
-},
-    {
+  },
+  {
   "name": "a1_valid_binary_comparisons",
   "assignment": 1,
   "file": "src/tests/functionality/assignment_1_expressions/valid/02_binary_comparisons.c",
   "expect": "valid_ast",
   "contains": ["Semantic analysis passed"]
-},
-    {
+  },
+  {
   "name": "a1_valid_unary_plus_minus",
   "assignment": 1,
   "file": "src/tests/functionality/assignment_1_expressions/valid/03_unary_plus_minus.c",
   "expect": "valid_ast",
   "contains": ["Semantic analysis passed"]
-},
-    {
+  },
+  {
   "name": "a1_valid_parentheses_precedence",
   "assignment": 1,
   "file": "src/tests/functionality/assignment_1_expressions/valid/04_parentheses_precedence.c",
   "expect": "valid_ast",
   "contains": ["Semantic analysis passed"]
-},
-    {
+  },
+  {
   "name": "a1_valid_logical_operators",
   "assignment": 1,
   "file": "src/tests/functionality/assignment_1_expressions/valid/05_logical_operators.c",
   "expect": "valid_ast",
   "contains": ["Semantic analysis passed"]
-},
-    {
+  },
+  {
   "name": "a1_valid_extra_comparison_operators",
   "assignment": 1,
   "file": "src/tests/functionality/assignment_1_expressions/valid/06_extra_comparison_operators.c",
   "expect": "valid_ast",
   "contains": ["Semantic analysis passed"]
-},
-    {
+  },
+  {
   "name": "a1_valid_modulo_operator",
   "assignment": 1,
   "file": "src/tests/functionality/assignment_1_expressions/valid/07_modulo_operator.c",
   "expect": "valid_ast",
   "contains": ["Semantic analysis passed"]
-},
-    {
+  },
+  {
   "name": "a1_valid_shift_operators",
   "assignment": 1,
   "file": "src/tests/functionality/assignment_1_expressions/valid/08_shift_operators.c",
   "expect": "valid_ast",
   "contains": ["Semantic analysis passed"]
-},
-    {
+  },
+  {
   "name": "a1_valid_bitwise_operators",
   "assignment": 1,
   "file": "src/tests/functionality/assignment_1_expressions/valid/09_bitwise_operators.c",
   "expect": "valid_ast",
   "contains": ["Semantic analysis passed"]
-},
-    {
+  },
+  {
   "name": "a1_valid_multiple_expressions",
   "assignment": 1,
   "file": "src/tests/functionality/assignment_1_expressions/valid/10_multiple_expressions.c",
   "expect": "valid_ast",
   "contains": ["Semantic analysis passed"]
-},
-    {
+  },
+  {
   "name": "a1_valid_multiline_whitespace_expressions",
   "assignment": 1,
   "file": "src/tests/functionality/assignment_1_expressions/valid/11_multiline_whitespace_expressions.c",
   "expect": "valid_ast",
   "contains": ["Semantic analysis passed"]
-},
-    {
+  },
+  {
   "name": "a1_valid_mixed_operator_precedence",
   "assignment": 1,
   "file": "src/tests/functionality/assignment_1_expressions/valid/12_mixed_operator_precedence.c",
   "expect": "valid_ast",
   "contains": ["Semantic analysis passed"]
-},
-    {
+  },
+  {
   "name": "a1_valid_constant_folding_expressions",
   "assignment": 1,
   "file": "src/tests/functionality/assignment_1_expressions/valid/13_constant_folding_expressions.c",
   "expect": "valid_ast",
   "contains": ["Semantic analysis passed"]
-},
-    {
+  },
+  {
   "name": "a1_valid_ast_visualisation_complex_expression",
   "assignment": 1,
   "file": "src/tests/functionality/assignment_1_expressions/valid/14_ast_visualisation_complex_expression.c",
   "expect": "valid_ast",
   "contains": ["Semantic analysis passed"]
-},
-    {
+  },
+  {
   "name": "a1_invalid_missing_semicolon_expression",
   "assignment": 1,
   "file": "src/tests/functionality/assignment_1_expressions/invalid_syntax/01_missing_semicolon_expression.c",
   "expect": "syntax_error",
   "contains": ["[Syntax Error]"]
-},
-    {
+  },
+  {
   "name": "a1_invalid_missing_closing_parenthesis",
   "assignment": 1,
   "file": "src/tests/functionality/assignment_1_expressions/invalid_syntax/02_missing_closing_parenthesis.c",
   "expect": "syntax_error",
   "contains": ["[Syntax Error]"]
-},
-    {
+  },
+  {
   "name": "a1_invalid_missing_right_operand",
   "assignment": 1,
   "file": "src/tests/functionality/assignment_1_expressions/invalid_syntax/03_missing_right_operand.c",
   "expect": "syntax_error",
   "contains": ["[Syntax Error]"]
-},
-    {
+  },
+  {
   "name": "a1_invalid_expression_without_main",
   "assignment": 1,
   "file": "src/tests/functionality/assignment_1_expressions/invalid_syntax/04_expression_without_main.c",
   "expect": "syntax_error",
   "contains": ["[Syntax Error]"]
-},
-    {
+  },
+  {
   "name": "a1_invalid_undeclared_identifier_expression",
   "assignment": 1,
   "file": "src/tests/functionality/assignment_1_expressions/invalid_semantic/01_undeclared_identifier_expression.c",
   "expect": "semantic_error",
   "contains": ["[Semantic Error]", "not declared"]
+  },
+  {
+  "name": "a2_valid_01_mandatory_basic_types_variables",
+  "assignment": 2,
+  "file": "src/tests/functionality/assignment_2_types_variables/valid/01_mandatory_basic_types_variables.c",
+  "expect": "valid_ast",
+  "contains": ["Semantic analysis passed"]
+},
+{
+  "name": "a2_valid_02_mandatory_const_initialization",
+  "assignment": 2,
+  "file": "src/tests/functionality/assignment_2_types_variables/valid/02_mandatory_const_initialization.c",
+  "expect": "valid_ast",
+  "contains": ["Semantic analysis passed"]
+},
+{
+  "name": "a2_valid_03_mandatory_basic_pointers_address_deref",
+  "assignment": 2,
+  "file": "src/tests/functionality/assignment_2_types_variables/valid/03_mandatory_basic_pointers_address_deref.c",
+  "expect": "valid_ast",
+  "contains": ["Semantic analysis passed"]
+},
+{
+  "name": "a2_valid_04_mandatory_explicit_casts",
+  "assignment": 2,
+  "file": "src/tests/functionality/assignment_2_types_variables/valid/04_mandatory_explicit_casts.c",
+  "expect": "valid_ast",
+  "contains": ["Semantic analysis passed"]
+},
+{
+  "name": "a2_valid_05_mandatory_increment_decrement",
+  "assignment": 2,
+  "file": "src/tests/functionality/assignment_2_types_variables/valid/05_mandatory_increment_decrement.c",
+  "expect": "valid_ast",
+  "contains": ["Semantic analysis passed"]
+},
+{
+  "name": "a2_valid_06_mandatory_const_pointer_reassign_allowed",
+  "assignment": 2,
+  "file": "src/tests/functionality/assignment_2_types_variables/valid/06_mandatory_const_pointer_reassign_allowed.c",
+  "expect": "valid_ast",
+  "contains": ["Semantic analysis passed"]
+},
+{
+  "name": "a2_runtime_01_mandatory_constant_propagation_return_variable",
+  "assignment": 2,
+  "file": "src/tests/functionality/assignment_2_types_variables/runtime/01_runtime_constant_propagation_return_variable.c",
+  "expect": "runtime",
+  "contains": ["Semantic analysis passed"],
+  "expected_stdout": "",
+  "expected_exit_code": 5
+},
+{
+  "name": "a2_runtime_02_mandatory_pointer_dereference_return",
+  "assignment": 2,
+  "file": "src/tests/functionality/assignment_2_types_variables/runtime/02_runtime_pointer_dereference_return.c",
+  "expect": "runtime",
+  "contains": ["Semantic analysis passed"],
+  "expected_stdout": "",
+  "expected_exit_code": 7
+},
+{
+  "name": "a2_runtime_03_mandatory_cast_float_to_int",
+  "assignment": 2,
+  "file": "src/tests/functionality/assignment_2_types_variables/runtime/03_runtime_cast_float_to_int.c",
+  "expect": "runtime",
+  "contains": ["Semantic analysis passed"],
+  "expected_stdout": "",
+  "expected_exit_code": 7
+},
+{
+  "name": "a2_runtime_04_mandatory_char_to_int_return",
+  "assignment": 2,
+  "file": "src/tests/functionality/assignment_2_types_variables/runtime/04_runtime_char_to_int_return.c",
+  "expect": "runtime",
+  "contains": ["Semantic analysis passed"],
+  "expected_stdout": "",
+  "expected_exit_code": 65
+},
+{
+  "name": "a2_runtime_05_mandatory_pointer_assignment_through_deref",
+  "assignment": 2,
+  "file": "src/tests/functionality/assignment_2_types_variables/runtime/05_runtime_pointer_assignment_through_deref.c",
+  "expect": "runtime",
+  "contains": ["Semantic analysis passed"],
+  "expected_stdout": "",
+  "expected_exit_code": 9
+},
+{
+  "name": "a2_runtime_06_mandatory_pointer_arithmetic",
+  "assignment": 2,
+  "file": "src/tests/functionality/assignment_2_types_variables/runtime/06_runtime_pointer_arithmetic.c",
+  "expect": "runtime",
+  "contains": ["Semantic analysis passed"],
+  "expected_stdout": "",
+  "expected_exit_code": 122
+},
+{
+  "name": "a2_invalid_semantic_01_mandatory_undeclared_variable",
+  "assignment": 2,
+  "file": "src/tests/functionality/assignment_2_types_variables/invalid_semantic/01_mandatory_undeclared_variable.c",
+  "expect": "semantic_error",
+  "contains": ["[Semantic Error]", "not declared"]
+},
+{
+  "name": "a2_invalid_semantic_02_mandatory_redeclaration_same_scope",
+  "assignment": 2,
+  "file": "src/tests/functionality/assignment_2_types_variables/invalid_semantic/02_mandatory_redeclaration_same_scope.c",
+  "expect": "semantic_error",
+  "contains": ["[Semantic Error]", "already declared"]
+},
+{
+  "name": "a2_invalid_semantic_03_mandatory_assign_to_const",
+  "assignment": 2,
+  "file": "src/tests/functionality/assignment_2_types_variables/invalid_semantic/03_mandatory_assign_to_const.c",
+  "expect": "semantic_error",
+  "contains": ["[Semantic Error]", "const"]
+},
+{
+  "name": "a2_invalid_semantic_04_mandatory_assign_to_literal",
+  "assignment": 2,
+  "file": "src/tests/functionality/assignment_2_types_variables/invalid_semantic/04_mandatory_assign_to_literal.c",
+  "expect": "semantic_error",
+  "contains": ["[Semantic Error]", "cannot assign to literal"]
+},
+{
+  "name": "a2_invalid_semantic_05_mandatory_dereference_non_pointer",
+  "assignment": 2,
+  "file": "src/tests/functionality/assignment_2_types_variables/invalid_semantic/05_mandatory_dereference_non_pointer.c",
+  "expect": "semantic_error",
+  "contains": ["[Semantic Error]", "dereference"]
+},
+{
+  "name": "a2_invalid_semantic_06_mandatory_address_of_literal",
+  "assignment": 2,
+  "file": "src/tests/functionality/assignment_2_types_variables/invalid_semantic/06_mandatory_address_of_literal.c",
+  "expect": "semantic_error",
+  "contains": ["[Semantic Error]", "lvalue required as unary '&' operand"]
+},
+{
+  "name": "a2_invalid_semantic_07_mandatory_pointer_to_int_assignment",
+  "assignment": 2,
+  "file": "src/tests/functionality/assignment_2_types_variables/invalid_semantic/07_mandatory_pointer_to_int_assignment_warning_or_error.c",
+  "expect": "semantic_error",
+  "contains": ["[Semantic Error]"]
+},
+{
+  "name": "a2_invalid_semantic_08_mandatory_const_pointer_write_error",
+  "assignment": 2,
+  "file": "src/tests/functionality/assignment_2_types_variables/invalid_semantic/08_mandatory_const_pointer_write_error.c",
+  "expect": "semantic_error",
+  "contains": ["[Semantic Error]", "read-only"]
+},
+{
+  "name": "a2_invalid_semantic_09_mandatory_missing_main",
+  "assignment": 2,
+  "file": "src/tests/functionality/assignment_2_types_variables/invalid_semantic/09_mandatory_missing_main.c",
+  "expect": "semantic_error",
+  "contains": ["[Semantic Error]", "missing", "main"]
+},
+{
+  "name": "a2_invalid_syntax_01_mandatory_bad_declaration",
+  "assignment": 2,
+  "file": "src/tests/functionality/assignment_2_types_variables/invalid_syntax/01_mandatory_bad_declaration.c",
+  "expect": "syntax_error",
+  "contains": ["[Syntax Error]"]
 },
     {
           "name": "a3_valid_01_mandatory_multiline_comment_compiles",
