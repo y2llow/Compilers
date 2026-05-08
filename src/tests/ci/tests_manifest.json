@@ -1422,6 +1422,14 @@
       "contains": ["Semantic analysis passed"],
       "expected_stdout": "40",
       "expected_exit_code": 0
+    },
+
+    {
+      "name": "fp_01_symbol_table",
+      "assignment": 6,
+      "file": "src/tests/ci/full_project_tests/01_symbol_table_visualiser.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
     }
   ]
 }
