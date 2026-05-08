@@ -63,6 +63,7 @@ def main():
     comment_lexer.removeErrorListeners()
     comment_token_stream = antlr4.CommonTokenStream(comment_lexer)
     comment_collector = CommentCollector(comment_token_stream, source_lines)
+
     try:
         comment_collector.collect()
     except Exception:
@@ -95,7 +96,7 @@ def main():
     print(ast)
     print()
 
-    # ── Include processing (mandatory) ────────────────────────
+    # Include processing
     print("=== Processing #include directives ===")
     typedef_registry = {}  # always defined; populated by IncludeProcessor below
     try:
@@ -146,7 +147,7 @@ def main():
     print(ast)
     print()
 
-    # ── num preprocessing ───────────────────────────────────
+    # ── Enum preprocessing ───────────────────────────────────
     print("=== Processing enum constants ===")
     try:
         from parser.preprocessor.enum_processor import EnumProcessor
@@ -235,22 +236,16 @@ def main():
 
     # ── Symbol table dot visualisatie ─────────────────────────
     if args.render_symb:
-        dot_lines = ['digraph SymbolTable {', '    node [fontname="Helvetica"];']
-        for i, scope in enumerate(analyzer.symbol_table.scopes):
-            scope_id = f"scope{i}"
-            dot_lines.append(f'    {scope_id} [label="Scope {i}", shape=rectangle];')
-            for name, sym in scope.items():
-                sym_id = f"sym_{i}_{name}"
-                const = "const " if sym.is_const else ""
-                stars = '*' * sym.pointer_depth
-                dims = ''.join([f'[{d}]' for d in sym.array_dimensions])
-                label = f"{const}{sym.type_name}{stars} {sym.name}{dims}"
-                dot_lines.append(f'    {sym_id} [label="{label}", shape=ellipse];')
-                dot_lines.append(f'    {scope_id} -> {sym_id};')
-        dot_lines.append('}')
+        from parser.semantics.symb_visualizer import render_symbol_table_dot
+
+        dot_string = render_symbol_table_dot(analyzer.symbol_table)
+
         with open(args.render_symb, "w") as f:
-            f.write('\n'.join(dot_lines))
+            f.write(dot_string)
+
         print(f"Symbol table dot file written to: {args.render_symb}")
+        print(f"Visualise with:          xdot {args.render_symb}")
+        print(f"Export PNG with:         dot -Tpng {args.render_symb} -o symb.png")
 
     # ── MIPS ──────────────────────────────────────────────────
     if args.target_mips:

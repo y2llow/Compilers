@@ -48,12 +48,42 @@ def check_contains(output, expected_parts):
     return missing
 
 
+def render_dot_to_png(dot_file, png_file):
+    """
+    Zet een .dot file om naar .png met Graphviz.
+
+    Best-effort:
+    - als dot_file niet bestaat: doe niets
+    - als Graphviz 'dot' niet geïnstalleerd is: doe niets
+    - als conversie faalt: doe niets
+    """
+    if not dot_file.exists():
+        return
+
+    if shutil.which("dot") is None:
+        return
+
+    cmd = [
+        "dot",
+        "-Tpng",
+        str(dot_file),
+        "-o",
+        str(png_file),
+    ]
+
+    run_command(cmd)
+
+
 def run_compiler_for_ast(test, test_out_dir):
     """
     Run:
         python -m src.main --input file.c --render_ast ast.dot
+
+    Maakt ook:
+        ast.png
     """
     ast_file = test_out_dir / "ast.dot"
+    ast_png = test_out_dir / "ast.png"
 
     cmd = [
         sys.executable,
@@ -67,12 +97,51 @@ def run_compiler_for_ast(test, test_out_dir):
 
     returncode, stdout, stderr = run_command(cmd)
 
+    render_dot_to_png(ast_file, ast_png)
+
     return {
         "returncode": returncode,
         "stdout": stdout,
         "stderr": stderr,
         "output": combined_output(stdout, stderr),
         "ast_file": ast_file,
+        "ast_png": ast_png,
+        "cmd": cmd,
+    }
+
+
+def run_compiler_for_symbol_table(test, test_out_dir):
+    """
+    Run:
+        python -m src.main --input file.c --render_symb symbol_table.dot
+
+    Maakt ook:
+        symbol_table.png
+    """
+    symb_file = test_out_dir / "symbol_table.dot"
+    symb_png = test_out_dir / "symbol_table.png"
+
+    cmd = [
+        sys.executable,
+        "-m",
+        "src.main",
+        "--input",
+        test["file"],
+        "--render_symb",
+        str(symb_file),
+    ]
+
+    returncode, stdout, stderr = run_command(cmd)
+
+    render_dot_to_png(symb_file, symb_png)
+
+    return {
+        "returncode": returncode,
+        "stdout": stdout,
+        "stderr": stderr,
+        "output": combined_output(stdout, stderr),
+        "symb_file": symb_file,
+        "symb_png": symb_png,
         "cmd": cmd,
     }
 
@@ -104,6 +173,26 @@ def run_compiler_for_llvm(test, test_out_dir):
         "ll_file": ll_file,
         "cmd": cmd,
     }
+
+
+def generate_visual_artifacts(test, test_out_dir, skip_runtime=False):
+    """
+    Best-effort artifacts voor elke test.
+
+    Probeert altijd:
+        ast.dot + ast.png
+        symbol_table.dot + symbol_table.png
+        output.ll
+
+    Als een test bewust faalt met syntax/semantic error, kunnen sommige files ontbreken.
+    Dat is oké: deze functie bepaalt niet of een test PASS/FAIL is.
+    """
+    run_compiler_for_ast(test, test_out_dir)
+    run_compiler_for_symbol_table(test, test_out_dir)
+
+    # Ook bij --skip-runtime mag output.ll nog geprobeerd worden.
+    # Runtime execution met lli wordt dan alleen overgeslagen.
+    run_compiler_for_llvm(test, test_out_dir)
 
 
 def run_lli(ll_file):
@@ -309,6 +398,14 @@ def check_runtime(test, test_out_dir, skip_runtime=False):
 def run_one_test(test, skip_runtime=False):
     test_out_dir = OUT_DIR / test["name"]
     test_out_dir.mkdir(parents=True, exist_ok=True)
+
+    # Maak per testmap de gevraagde artifacts:
+    #   ast.dot + ast.png
+    #   symbol_table.dot + symbol_table.png
+    #   output.ll
+    #
+    # Dit is best-effort en bepaalt niet de PASS/FAIL-status.
+    generate_visual_artifacts(test, test_out_dir, skip_runtime=skip_runtime)
 
     expect = test["expect"]
 

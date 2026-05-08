@@ -717,7 +717,7 @@ class SemanticAnalyzer:
         old_return_type = self.current_function_return_type
         self.current_function_return_type = (node.return_type, node.return_ptr)
 
-        self.symbol_table.push_scope()
+        self.symbol_table.push_scope(f"function {node.name}")
 
         for param in node.params:
             success, existing = self.symbol_table.add_symbol(
@@ -789,7 +789,7 @@ class SemanticAnalyzer:
     # ============================================================
 
     def visit_CompoundStmtNode(self, node):
-        self.symbol_table.push_scope()
+        self.symbol_table.push_scope("block")
         self._visit_block_items(node.items)
         self.symbol_table.pop_scope()
 
@@ -828,7 +828,7 @@ class SemanticAnalyzer:
         self.loop_depth -= 1
 
     def visit_ForNode(self, node):
-        self.symbol_table.push_scope()
+        self.symbol_table.push_scope("for")
 
         if node.init is not None:
             self.visit(node.init)
