@@ -1630,24 +1630,48 @@ class LLVMGenerator:
 
         Ondersteunt:
             p.x
+            p.inner.x
             ptr->x
+            p.inner_ptr->x
         """
 
-        # Case 1: p.x
+        # Case 1: p.x of p.inner.x
         if isinstance(node, MemberAccessNode):
-            if not isinstance(node.obj, IdentifierNode):
-                raise NotImplementedError("Member access op complexe expressie nog niet ondersteund")
+            if isinstance(node.obj, IdentifierNode):
+                # Lokale struct variable:
+                #   struct Header h;
+                #   h.src
+                struct_ptr = self.variables[node.obj.name]
+            elif isinstance(node.obj, MemberAccessNode):
+                # Nested struct value:
+                #   h.data.length
+                # Eerst pointer naar h.data krijgen.
+                # h.data is zelf een struct value, dus de pointer daarop is goed.
+                struct_ptr = self._get_member_ptr(node.obj)
+            elif isinstance(node.obj, ArrayAccessNode):
+                # Array of structs:
+                #   packets[0].length
+                # _get_array_ptr geeft pointer naar packets[0], dus %struct.Packet*
+                struct_ptr = self._get_array_ptr(node.obj)
 
-            struct_ptr = self.variables[node.obj.name]
+            elif isinstance(node.obj, PointerMemberAccessNode):
+                # Bijvoorbeeld:
+                #   p->data.length
+                struct_ptr = self._get_member_ptr(node.obj)
+            else:
+                raise NotImplementedError(
+                    f"Member access op complexe expressie nog niet ondersteund: {type(node.obj)}"
+                )
 
-            # struct_ptr is normaal: %struct.Point*
+            if not isinstance(struct_ptr.type, ir.PointerType):
+                raise TypeError("'.' verwacht een pointer naar een struct value")
+
             struct_type = struct_ptr.type.pointee
 
         # Case 2: ptr->x
         elif isinstance(node, PointerMemberAccessNode):
-            # ptr->x:
-            # - als ptr een IdentifierNode is, self.visit(ptr) laadt de pointerwaarde
-            # - als ptr een MemberAccessNode is, bv a.next, self.visit(a.next) laadt ook de pointerwaarde
+            # Voor -> moet de linkerkant een pointerwaarde opleveren.
+            # self.visit(...) mag hier laden, want ptr->x betekent: laad ptr, daarna GEP.
             struct_ptr = self.visit(node.ptr)
 
             if not isinstance(struct_ptr.type, ir.PointerType):
@@ -1656,9 +1680,11 @@ class LLVMGenerator:
             struct_type = struct_ptr.type.pointee
 
         else:
-            raise NotImplementedError(f"Member pointer lookup niet ondersteund voor {type(node)}")
+            raise NotImplementedError(
+                f"Member pointer lookup niet ondersteund voor {type(node)}"
+            )
 
-        # Zoek struct naam via LLVM type, bv %"struct.Point"
+        # Zoek struct naam via LLVM type, bv %"struct.Packet"
         struct_name = None
         for name, llvm_type in self.struct_types.items():
             if llvm_type == struct_type:
@@ -1666,7 +1692,7 @@ class LLVMGenerator:
                 break
 
         if struct_name is None:
-            raise TypeError("Kan struct type niet vinden voor member access")
+            raise TypeError(f"Kan struct type niet vinden voor member access: {struct_type}")
 
         members = self.struct_members[struct_name]
 
