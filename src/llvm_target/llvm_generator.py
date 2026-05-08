@@ -110,6 +110,7 @@ class LLVMGenerator:
 
         # Symbol table: variabele naam -> LLVM waarde
         self.variables = ScopedVariableTable()
+        self.global_variables = {}
 
         # Maps: line_number -> {'source': str, 'leading': list, 'inline': str}
         self.line_to_comment = {}
@@ -283,6 +284,11 @@ class LLVMGenerator:
             if isinstance(item, StructDeclNode):
                 self.visit(item)
 
+        # Pass 0.5: globale variabelen declareren
+        for item in node.top_level_items:
+            if isinstance(item, VarDeclNode):
+                self._declare_global_var(item)
+
         # Pass 1: includes skippen, functies declareren
         for item in node.top_level_items:
             if isinstance(item, IncludeNode):
@@ -446,7 +452,7 @@ class LLVMGenerator:
         zero = ir.Constant(ir.IntType(32), 0)
 
         if isinstance(node, IdentifierNode):
-            var_ptr = self.variables[node.name]
+            var_ptr = self._lookup_var_ptr(node.name)
 
             # Lokale array: var_ptr is bv [3 x i32]*
             if isinstance(var_ptr.type.pointee, ir.ArrayType):
@@ -478,7 +484,7 @@ class LLVMGenerator:
         self._collect_comments(node)
 
         if isinstance(node.target, IdentifierNode):
-            var_ptr = self.variables[node.target.name]
+            var_ptr = self._lookup_var_ptr(node.target.name)
             value = self.visit(node.value)
 
             target_llvm_type = var_ptr.type.pointee
@@ -488,7 +494,7 @@ class LLVMGenerator:
 
         elif isinstance(node.target, DereferenceNode):
             # Pointer assignment: *ptr = 10
-            ptr_value = self.variables[node.target.operand.name]
+            ptr_value = self._lookup_var_ptr(node.target.operand.name)
             ptr_loaded = self.builder.load(ptr_value)
             value = self.visit(node.value)
             value = self._cast_value(value, ptr_loaded.type.pointee)
@@ -547,13 +553,8 @@ class LLVMGenerator:
     def _visit_block_items(self, items):
         """Helper: bezoek alle items in een blok.
 
-        Stop zodra het huidige basic block al een terminator heeft.
-        Dit voorkomt invalid LLVM na statements zoals:
-            break;
-            continue;
-            return;
-        Een LLVM basic block mag namelijk maar eindigen met exact één
-        terminator-instructie en daarna mogen er geen instructies meer volgen.
+        Stop zodra het huidige basic block terminated is.
+        Dit voorkomt invalid LLVM na break/continue/return.
         """
         for item in items:
             if self.builder is not None and self.builder.block.is_terminated:
@@ -649,7 +650,7 @@ class LLVMGenerator:
 
     def visit_BreakNode(self, node: BreakNode):
         """
-        Break statement - jump naar end van loop/switch.
+        Break statement - jump naar end van loop.
         """
         self._collect_comments(node)
 
@@ -664,7 +665,7 @@ class LLVMGenerator:
 
     def visit_ContinueNode(self, node: ContinueNode):
         """
-        Continue statement - jump naar update block bij for, of cond block bij while.
+        Continue statement - jump naar update (for) of cond (while).
         """
         self._collect_comments(node)
 
@@ -859,7 +860,7 @@ class LLVMGenerator:
         LLVM IR:
             %1 = load i32, i32* %x
         """
-        var_ptr = self.variables[node.name]
+        var_ptr = self._lookup_var_ptr(node.name)
         # Als het een array is, geef pointer naar eerste element (geen load)
         if isinstance(var_ptr.type.pointee, ir.ArrayType):
             zero = ir.Constant(ir.IntType(32), 0)
@@ -1120,17 +1121,17 @@ class LLVMGenerator:
 
     def visit_IncrementNode(self, node: IncrementNode):
         if isinstance(node.operand, IdentifierNode):
-            var_ptr = self.variables[node.operand.name]
+            var_ptr = self._lookup_var_ptr(node.operand.name)
             old_value = self.builder.load(var_ptr, name=node.operand.name)
         elif isinstance(node.operand, DereferenceNode):
             # (*ptr)++ — laad de pointer, gebruik die als var_ptr
-            ptr = self.variables[node.operand.operand.name]
+            ptr = self._lookup_var_ptr(node.operand.operand.name)
             var_ptr = self.builder.load(ptr)
             old_value = self.builder.load(var_ptr)
         elif isinstance(node.operand, ArrayAccessNode):
             # a[i]++ — bereken de pointer naar het element
             zero = ir.Constant(ir.IntType(32), 0)
-            arr_ptr = self.variables[node.operand.array.name]
+            arr_ptr = self._lookup_var_ptr(node.operand.array.name)
             index = self.visit(node.operand.index)
             var_ptr = self.builder.gep(arr_ptr, [zero, index], inbounds=True)
             old_value = self.builder.load(var_ptr)
@@ -1150,17 +1151,17 @@ class LLVMGenerator:
 
     def visit_DecrementNode(self, node: DecrementNode):
         if isinstance(node.operand, IdentifierNode):
-            var_ptr = self.variables[node.operand.name]
+            var_ptr = self._lookup_var_ptr(node.operand.name)
             old_value = self.builder.load(var_ptr, name=node.operand.name)
         elif isinstance(node.operand, DereferenceNode):
             # (*ptr)-- — laad de pointer, gebruik die als var_ptr
-            ptr = self.variables[node.operand.operand.name]
+            ptr = self._lookup_var_ptr(node.operand.operand.name)
             var_ptr = self.builder.load(ptr)
             old_value = self.builder.load(var_ptr)
         elif isinstance(node.operand, ArrayAccessNode):
             # a[i]-- — bereken de pointer naar het element
             zero = ir.Constant(ir.IntType(32), 0)
-            arr_ptr = self.variables[node.operand.array.name]
+            arr_ptr = self._lookup_var_ptr(node.operand.array.name)
             index = self.visit(node.operand.index)
             var_ptr = self.builder.gep(arr_ptr, [zero, index], inbounds=True)
             old_value = self.builder.load(var_ptr)
@@ -1190,7 +1191,7 @@ class LLVMGenerator:
 
         # &x
         if isinstance(operand, IdentifierNode):
-            return self.variables[operand.name]
+            return self._lookup_var_ptr(operand.name)
 
         # &arr[i]
         if isinstance(operand, ArrayAccessNode):
@@ -1342,7 +1343,7 @@ class LLVMGenerator:
             value = self.visit(arg)
             # Array: geef pointer naar eerste element ipv de array zelf
             if isinstance(value.type, ir.ArrayType):
-                ptr = self.variables[arg.name] if isinstance(arg, IdentifierNode) else None
+                ptr = self._lookup_var_ptr(arg.name) if isinstance(arg, IdentifierNode) else None
                 if ptr is not None:
                     value = self.builder.gep(ptr, [zero, zero], inbounds=True)
             # Float moet gepromoveerd worden naar double voor printf varargs
@@ -1396,7 +1397,7 @@ class LLVMGenerator:
         for arg in node.args:
             if isinstance(arg, AddressOfNode):
                 # &x → geef de pointer naar x direct mee
-                ptr = self.variables[arg.operand.name]
+                ptr = self._lookup_var_ptr(arg.operand.name)
                 # Als het een array is, geef pointer naar eerste element
                 if isinstance(ptr.type.pointee, ir.ArrayType):
                     ptr = self.builder.gep(ptr, [zero, zero], inbounds=True)
@@ -1651,24 +1652,42 @@ class LLVMGenerator:
 
         Ondersteunt:
             p.x
+            p.inner.x
+            arr[i].x
+            arr[i].inner.x
             ptr->x
+            p.inner_ptr->x
         """
 
-        # Case 1: p.x
+        # Case 1: p.x / p.inner.x / arr[i].x
         if isinstance(node, MemberAccessNode):
-            if not isinstance(node.obj, IdentifierNode):
-                raise NotImplementedError("Member access op complexe expressie nog niet ondersteund")
+            if isinstance(node.obj, IdentifierNode):
+                struct_ptr = self._lookup_var_ptr(node.obj.name)
 
-            struct_ptr = self.variables[node.obj.name]
+            elif isinstance(node.obj, ArrayAccessNode):
+                # Array of structs: packets[0].length
+                struct_ptr = self._get_array_ptr(node.obj)
 
-            # struct_ptr is normaal: %struct.Point*
+            elif isinstance(node.obj, MemberAccessNode):
+                # Nested struct value: h.data.length
+                struct_ptr = self._get_member_ptr(node.obj)
+
+            elif isinstance(node.obj, PointerMemberAccessNode):
+                # p->data.length
+                struct_ptr = self._get_member_ptr(node.obj)
+
+            else:
+                raise NotImplementedError(
+                    f"Member access op complexe expressie nog niet ondersteund: {type(node.obj)}"
+                )
+
+            if not isinstance(struct_ptr.type, ir.PointerType):
+                raise TypeError("'.' verwacht een pointer naar een struct value")
+
             struct_type = struct_ptr.type.pointee
 
         # Case 2: ptr->x
         elif isinstance(node, PointerMemberAccessNode):
-            # ptr->x:
-            # - als ptr een IdentifierNode is, self.visit(ptr) laadt de pointerwaarde
-            # - als ptr een MemberAccessNode is, bv a.next, self.visit(a.next) laadt ook de pointerwaarde
             struct_ptr = self.visit(node.ptr)
 
             if not isinstance(struct_ptr.type, ir.PointerType):
@@ -1677,9 +1696,11 @@ class LLVMGenerator:
             struct_type = struct_ptr.type.pointee
 
         else:
-            raise NotImplementedError(f"Member pointer lookup niet ondersteund voor {type(node)}")
+            raise NotImplementedError(
+                f"Member pointer lookup niet ondersteund voor {type(node)}"
+            )
 
-        # Zoek struct naam via LLVM type, bv %"struct.Point"
+        # Zoek struct naam via LLVM type, bv %"struct.Packet"
         struct_name = None
         for name, llvm_type in self.struct_types.items():
             if llvm_type == struct_type:
@@ -1687,7 +1708,7 @@ class LLVMGenerator:
                 break
 
         if struct_name is None:
-            raise TypeError("Kan struct type niet vinden voor member access")
+            raise TypeError(f"Kan struct type niet vinden voor member access: {struct_type}")
 
         members = self.struct_members[struct_name]
 
@@ -1730,3 +1751,87 @@ class LLVMGenerator:
         """
         field_ptr = self._get_member_ptr(node)
         return self.builder.load(field_ptr)
+    def _lookup_var_ptr(self, name):
+        """
+        Zoek eerst lokale variabele, daarna globale variabele.
+        """
+        local = self.variables.get(name)
+        if local is not None:
+            return local
+
+        if name in self.global_variables:
+            return self.global_variables[name]
+
+        raise KeyError(name)
+
+    def _const_initializer_for_global(self, node, llvm_type):
+        """
+        Maak een constante initializer voor globale variabelen.
+
+        Ondersteunt eenvoudige globals zoals:
+            int g = 5;
+            float f = 2.5;
+            char c = 'A';
+            int* p = 0;
+        """
+        if node is None:
+            return ir.Constant(llvm_type, None)
+
+        if isinstance(node, IntLiteralNode):
+            if isinstance(llvm_type, ir.PointerType):
+                if node.value == 0:
+                    return ir.Constant(llvm_type, None)
+                return ir.Constant(llvm_type, None)
+            return ir.Constant(llvm_type, node.value)
+
+        if isinstance(node, FloatLiteralNode):
+            return ir.Constant(llvm_type, node.value)
+
+        if isinstance(node, CharLiteralNode):
+            value = node.value
+            escape_map = {
+                '\\n': 10,
+                '\\t': 9,
+                '\\r': 13,
+                '\\0': 0,
+                '\\\\': 92,
+                "\\'": 39,
+                '\\"': 34,
+            }
+            char_val = escape_map.get(value, ord(value[0]) if value else 0)
+            return ir.Constant(llvm_type, char_val)
+
+        return ir.Constant(llvm_type, None)
+
+    def _declare_global_var(self, node: VarDeclNode):
+        """
+        Genereer LLVM global variable voor top-level declarations.
+
+        C:
+            int g = 5;
+
+        LLVM:
+            @g = global i32 5
+        """
+        if node.name in self.global_variables:
+            return self.global_variables[node.name]
+
+        llvm_type = self._get_llvm_type(node.type_name, node.pointer_depth)
+
+        if node.array_dimensions:
+            array_type = llvm_type
+            for dim in reversed(node.array_dimensions):
+                array_type = ir.ArrayType(array_type, dim)
+            llvm_type = array_type
+
+        global_var = ir.GlobalVariable(self.module, llvm_type, name=node.name)
+        global_var.linkage = "common" if node.value is None else "internal"
+        global_var.global_constant = False
+
+        if node.array_dimensions:
+            global_var.initializer = ir.Constant(llvm_type, None)
+        else:
+            global_var.initializer = self._const_initializer_for_global(node.value, llvm_type)
+
+        self.global_variables[node.name] = global_var
+        return global_var
