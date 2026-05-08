@@ -1430,6 +1430,22 @@
       "file": "src/tests/ci/full_project_tests/01_symbol_table_visualiser.c",
       "expect": "valid_ast",
       "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "fp_02_ast_visualiser",
+      "assignment": 6,
+      "file": "src/tests/ci/full_project_tests/02_ast_visualiser.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "fp_03_llvm_codegen_showcase",
+      "assignment": 6,
+      "file": "src/tests/ci/full_project_tests/03_llvm_codegen_showcase.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "",
+      "expected_exit_code": 20
     }
   ]
 }
