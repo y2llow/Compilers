@@ -1955,6 +1955,7 @@ class LLVMGenerator:
             return self._get_union_member_ptr(aggregate_ptr, union_name, node.member)
 
         raise TypeError(f"Kan struct/union type niet vinden voor member access: {aggregate_type}")
+
     def visit_MemberAccessNode(self, node):
         """
         Lees een struct member.
