@@ -612,69 +612,80 @@ class LLVMGenerator:
 
     def visit_SwitchNode(self, node: SwitchNode):
         """
-        Switch statement met cases.
+        Switch statement with C-style fall-through.
 
-        C code:
-            switch (x) {
-                case 1: ...
-                case 2: ...
-                default: ...
-            }
+        In C:
+            case 1:
+                ...
+            case 2:
+                ...
+                break;
+
+        If case 1 has no break, execution continues into case 2.
         """
         self._collect_comments(node)
 
-        # Evalueer expression
+        if self.builder.block.is_terminated:
+            return
+
         expr_val = self.visit(node.expression)
 
-        # Maak end block aan
-        end_block = self.builder.block.parent.append_basic_block(name="switch.end")
+        function = self.builder.block.parent
+        end_block = function.append_basic_block(name="switch.end")
 
-        # Push naar loop stack zodat break werkt
-        self.loop_stack.append((None, None, end_block))
-
-        # Maak blocks voor elke case
+        # Create one block per case
         case_blocks = []
-        for case in node.cases:
-            case_block = self.builder.block.parent.append_basic_block(name="case")
-            case_blocks.append(case_block)
+        for _ in node.cases:
+            case_blocks.append(function.append_basic_block(name="switch.case"))
 
-        default_block = None
+        # Create default block if needed
         if node.default is not None:
-            default_block = self.builder.block.parent.append_basic_block(name="default")
+            default_block = function.append_basic_block(name="switch.default")
         else:
             default_block = end_block
 
-        # Switch instruction
+        # Build switch instruction
         switch_instr = self.builder.switch(expr_val, default_block)
 
-        # Voeg cases toe aan switch
         for i, case in enumerate(node.cases):
             case_value = self.visit(case.value)
-            # Extract de integer waarde
+
             if isinstance(case_value, ir.Constant):
                 case_int = case_value.constant
             else:
                 case_int = 0
+
             switch_instr.add_case(ir.Constant(ir.IntType(32), case_int), case_blocks[i])
 
-        # Generate code voor elke case
+        # break inside switch should jump to switch.end
+        self.loop_stack.append((None, None, end_block))
+
+        # Generate each case body
         for i, case in enumerate(node.cases):
             self.builder.position_at_end(case_blocks[i])
             self._visit_block_items(case.items)
-            if not case_blocks[i].is_terminated:
-                self.builder.branch(end_block)
 
-        # Default block
+            if not self.builder.block.is_terminated:
+                # C fall-through:
+                # If there is a next case, jump to it.
+                # Otherwise jump to default if present, else switch.end.
+                if i + 1 < len(case_blocks):
+                    self.builder.branch(case_blocks[i + 1])
+                elif node.default is not None:
+                    self.builder.branch(default_block)
+                else:
+                    self.builder.branch(end_block)
+
+        # Generate default body
         if node.default is not None:
             self.builder.position_at_end(default_block)
             self._visit_block_items(node.default.items)
-            if not default_block.is_terminated:
+
+            if not self.builder.block.is_terminated:
                 self.builder.branch(end_block)
 
-        # Pop van loop stack
         self.loop_stack.pop()
 
-        # End block
         self.builder.position_at_end(end_block)
 
     def visit_TernaryOpNode(self, node: TernaryOpNode):
