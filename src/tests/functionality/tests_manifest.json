@@ -2289,6 +2289,77 @@
       "file": "src/tests/functionality/assignment_6_advanced_features/invalid_semantic/07_mandatory_nested_struct_missing_member.c",
       "expect": "semantic_error",
       "contains": ["[Semantic Error]", "has no member"]
+    },
+    {
+      "name": "a6_optional_01_union_basic_int",
+      "assignment": 6,
+      "file": "src/tests/functionality/assignment_6_advanced_features/optional/01_optional_union_basic_int.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "",
+      "expected_exit_code": 5
+    },
+    {
+      "name": "a6_optional_02_union_pointer_arrow",
+      "assignment": 6,
+      "file": "src/tests/functionality/assignment_6_advanced_features/optional/02_optional_union_pointer_arrow.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "",
+      "expected_exit_code": 7
+    },
+    {
+      "name": "a6_optional_03_union_big_combined",
+      "assignment": 6,
+      "file": "src/tests/functionality/assignment_6_advanced_features/optional/03_optional_union_big_combined.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "78",
+      "expected_exit_code": 22
+    },
+    {
+      "name": "a6_optional_04_union_member_type_checking_runtime",
+      "assignment": 6,
+      "file": "src/tests/functionality/assignment_6_advanced_features/optional/04_optional_union_member_type_checking_runtime.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "",
+      "expected_exit_code": 12
+    },
+    {
+      "name": "a6_optional_05_union_typedef_alias",
+      "assignment": 6,
+      "file": "src/tests/functionality/assignment_6_advanced_features/optional/05_optional_union_typedef_alias.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a6_optional_06_typedef_union_inline_alias",
+      "assignment": 6,
+      "file": "src/tests/functionality/assignment_6_advanced_features/optional/06_optional_typedef_union_inline_alias.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a6_optional_07_union_missing_member",
+      "assignment": 6,
+      "file": "src/tests/functionality/assignment_6_advanced_features/optional/07_optional_union_missing_member.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]", "has no member"]
+    },
+    {
+      "name": "a6_optional_08_union_member_type_mismatch",
+      "assignment": 6,
+      "file": "src/tests/functionality/assignment_6_advanced_features/optional/08_optional_union_member_type_mismatch.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]"]
+    },
+    {
+      "name": "a6_optional_09_union_arrow_on_non_pointer",
+      "assignment": 6,
+      "file": "src/tests/functionality/assignment_6_advanced_features/optional/09_optional_union_arrow_on_non_pointer.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]", "non-pointer"]
     }
   ]
 }
