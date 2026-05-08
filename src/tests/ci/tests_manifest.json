@@ -1388,6 +1388,40 @@
       "contains": ["Semantic analysis passed"],
       "expected_stdout": "",
       "expected_exit_code": 4
+    },
+    {
+      "name": "a6_runtime_struct_contains_struct_value",
+      "assignment": 6,
+      "file": "src/tests/ci/assignment_6_advanced_features/runtime/06_struct_contains_struct_value.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "45",
+      "expected_exit_code": 0
+    },
+    {
+      "name": "a6_invalid_struct_value_missing_nested_member",
+      "assignment": 6,
+      "file": "src/tests/ci/assignment_6_advanced_features/invalid_semantic/06_struct_value_invalid_nested_member.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]", "has no member"]
+    },
+    {
+      "name": "a6_runtime_array_of_structs",
+      "assignment": 6,
+      "file": "src/tests/ci/assignment_6_advanced_features/runtime/07_array_of_structs_ok.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "33",
+      "expected_exit_code": 0
+    },
+    {
+      "name": "a6_runtime_array_of_structs_with_nested_struct",
+      "assignment": 6,
+      "file": "src/tests/ci/assignment_6_advanced_features/runtime/08_array_of_structs_with_nested_struct.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "40",
+      "expected_exit_code": 0
     }
   ]
 }
