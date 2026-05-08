@@ -37,3 +37,4 @@ antlr-*.jar
 src/antlr_files/example_source_files/temp.c
 # CI local output
 .ci_out/
+.ci_out_functionality
