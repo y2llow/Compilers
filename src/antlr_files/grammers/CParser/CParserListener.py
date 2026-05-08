@@ -134,6 +134,33 @@ class CParserListener(ParseTreeListener):
         pass
 
 
+    # Enter a parse tree produced by CParserParser#union_decl.
+    def enterUnion_decl(self, ctx:CParserParser.Union_declContext):
+        pass
+
+    # Exit a parse tree produced by CParserParser#union_decl.
+    def exitUnion_decl(self, ctx:CParserParser.Union_declContext):
+        pass
+
+
+    # Enter a parse tree produced by CParserParser#union_specifier.
+    def enterUnion_specifier(self, ctx:CParserParser.Union_specifierContext):
+        pass
+
+    # Exit a parse tree produced by CParserParser#union_specifier.
+    def exitUnion_specifier(self, ctx:CParserParser.Union_specifierContext):
+        pass
+
+
+    # Enter a parse tree produced by CParserParser#union_member.
+    def enterUnion_member(self, ctx:CParserParser.Union_memberContext):
+        pass
+
+    # Exit a parse tree produced by CParserParser#union_member.
+    def exitUnion_member(self, ctx:CParserParser.Union_memberContext):
+        pass
+
+
     # Enter a parse tree produced by CParserParser#function_definition.
     def enterFunction_definition(self, ctx:CParserParser.Function_definitionContext):
         pass

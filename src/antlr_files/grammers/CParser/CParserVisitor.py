@@ -79,6 +79,21 @@ class CParserVisitor(ParseTreeVisitor):
         return self.visitChildren(ctx)
 
 
+    # Visit a parse tree produced by CParserParser#union_decl.
+    def visitUnion_decl(self, ctx:CParserParser.Union_declContext):
+        return self.visitChildren(ctx)
+
+
+    # Visit a parse tree produced by CParserParser#union_specifier.
+    def visitUnion_specifier(self, ctx:CParserParser.Union_specifierContext):
+        return self.visitChildren(ctx)
+
+
+    # Visit a parse tree produced by CParserParser#union_member.
+    def visitUnion_member(self, ctx:CParserParser.Union_memberContext):
+        return self.visitChildren(ctx)
+
+
     # Visit a parse tree produced by CParserParser#function_definition.
     def visitFunction_definition(self, ctx:CParserParser.Function_definitionContext):
         return self.visitChildren(ctx)
