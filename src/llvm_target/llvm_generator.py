@@ -347,11 +347,10 @@ class LLVMGenerator:
             self.variables[param.name] = param_ptr
 
         # Body genereren
-        for stmt in node.body.items:
-            self.visit(stmt)
+        self._visit_block_items(node.body.items)
 
         # Default return als er geen expliciete return was
-        if not entry_block.is_terminated:
+        if not self.builder.block.is_terminated:
             if isinstance(return_type, ir.VoidType):
                 self.builder.ret_void()
             elif isinstance(return_type, ir.IntType):
@@ -536,23 +535,38 @@ class LLVMGenerator:
         # Then branch
         self.builder.position_at_end(then_block)
         self.visit(node.then_body)
-        if not then_block.is_terminated:
+        if not self.builder.block.is_terminated:
             self.builder.branch(end_block)
 
         # Else branch
         self.builder.position_at_end(else_block)
         if node.else_body is not None:
             self.visit(node.else_body)
-        if not else_block.is_terminated:
+        if not self.builder.block.is_terminated:
             self.builder.branch(end_block)
 
         # End block — only position here if it's reachable
         self.builder.position_at_end(end_block)
 
     def _visit_block_items(self, items):
-        """Helper: bezoek alle items in een blok"""
+        """Helper: bezoek alle items in een blok.
+
+        Stop zodra het huidige basic block al een terminator heeft.
+        Dit voorkomt invalid LLVM na statements zoals:
+            break;
+            continue;
+            return;
+        Een LLVM basic block mag namelijk maar eindigen met exact één
+        terminator-instructie en daarna mogen er geen instructies meer volgen.
+        """
         for item in items:
+            if self.builder is not None and self.builder.block.is_terminated:
+                break
+
             self.visit(item)
+
+            if self.builder is not None and self.builder.block.is_terminated:
+                break
 
     def visit_CompoundStmtNode(self, node: CompoundStmtNode):
         """
@@ -587,7 +601,7 @@ class LLVMGenerator:
 
         self.builder.position_at_end(body_block)
         self.visit(node.body)
-        if not body_block.is_terminated:
+        if not self.builder.block.is_terminated:
             self.builder.branch(cond_block)
 
         # Pop van loop stack
@@ -623,13 +637,14 @@ class LLVMGenerator:
 
         self.builder.position_at_end(body_block)
         self.visit(node.body)
-        if not body_block.is_terminated:
+        if not self.builder.block.is_terminated:
             self.builder.branch(update_block)
 
         self.builder.position_at_end(update_block)
         if node.update is not None:
             self.visit(node.update)
-        self.builder.branch(cond_block)
+        if not self.builder.block.is_terminated:
+            self.builder.branch(cond_block)
 
         # Pop van stack NA body
         self.loop_stack.pop()
@@ -638,9 +653,12 @@ class LLVMGenerator:
 
     def visit_BreakNode(self, node: BreakNode):
         """
-        Break statement - jump naar end van loop.
+        Break statement - jump naar end van loop/switch.
         """
         self._collect_comments(node)
+
+        if self.builder.block.is_terminated:
+            return
 
         if self.loop_stack:
             _, _, end_block = self.loop_stack[-1]
@@ -650,9 +668,12 @@ class LLVMGenerator:
 
     def visit_ContinueNode(self, node: ContinueNode):
         """
-        Continue statement - jump naar update (for) of cond (while).
+        Continue statement - jump naar update block bij for, of cond block bij while.
         """
         self._collect_comments(node)
+
+        if self.builder.block.is_terminated:
+            return
 
         if self.loop_stack:
             _, update_or_cond_block, _ = self.loop_stack[-1]
@@ -870,9 +891,6 @@ class LLVMGenerator:
         if isinstance(llvm_type, ir.ArrayType):
             return llvm_type.count * self._sizeof_llvm_type(llvm_type.element)
 
-        if isinstance(llvm_type, ir.IdentifiedStructType):
-            return 8
-
         return 1
 
     def visit_BinaryOpNode(self, node: BinaryOpNode):
@@ -1075,13 +1093,6 @@ class LLVMGenerator:
             seen.add(type_name)
 
             real_type, alias_pointer_depth = self.typedef_map[type_name]
-
-            # Protect against self-alias:
-            #   typedef struct Point Point;
-            #   typedef union Value Value;
-            if real_type == type_name:
-                break
-
             type_name = real_type
             pointer_depth += alias_pointer_depth
 
@@ -1094,20 +1105,14 @@ class LLVMGenerator:
             base_type = ir.IntType(8)
         elif type_name == 'void':
             base_type = ir.VoidType()
-
         else:
-            # Struct/union prefix verwijderen als die nog aanwezig is
-            aggregate_name = type_name
+            # Struct prefix verwijderen als die nog aanwezig is
+            struct_name = type_name
+            if struct_name.startswith("struct") and len(struct_name) > len("struct"):
+                struct_name = struct_name[len("struct"):]
 
-            for prefix in ("struct", "union"):
-                if aggregate_name.startswith(prefix) and len(aggregate_name) > len(prefix):
-                    aggregate_name = aggregate_name[len(prefix):]
-                    break
-
-            if aggregate_name in self.struct_types:
-                base_type = self.struct_types[aggregate_name]
-            elif aggregate_name in self.union_types:
-                base_type = self.union_types[aggregate_name]
+            if struct_name in self.struct_types:
+                base_type = self.struct_types[struct_name]
             else:
                 raise ValueError(f"Onbekend type: {type_name}")
 
@@ -1593,10 +1598,6 @@ class LLVMGenerator:
         raise TypeError(f"Cannot cast {value.type} to {target_type}")
 
     def visit_TypedefNode(self, node):
-
-        if node.new_name == node.existing_type:
-            return
-
         self.typedef_map[node.new_name] = (node.existing_type, node.pointer_depth)
 
     def visit_StructDeclNode(self, node):
@@ -1739,48 +1740,24 @@ class LLVMGenerator:
 
         Ondersteunt:
             p.x
-            p.inner.x
             ptr->x
-            p.inner_ptr->x
         """
 
-        # Case 1: p.x of p.inner.x
+        # Case 1: p.x
         if isinstance(node, MemberAccessNode):
-            if isinstance(node.obj, IdentifierNode):
-                # Lokale struct variable:
-                #   struct Header h;
-                #   h.src
-                struct_ptr = self.variables[node.obj.name]
-            elif isinstance(node.obj, MemberAccessNode):
-                # Nested struct value:
-                #   h.data.length
-                # Eerst pointer naar h.data krijgen.
-                # h.data is zelf een struct value, dus de pointer daarop is goed.
-                struct_ptr = self._get_member_ptr(node.obj)
-            elif isinstance(node.obj, ArrayAccessNode):
-                # Array of structs:
-                #   packets[0].length
-                # _get_array_ptr geeft pointer naar packets[0], dus %struct.Packet*
-                struct_ptr = self._get_array_ptr(node.obj)
+            if not isinstance(node.obj, IdentifierNode):
+                raise NotImplementedError("Member access op complexe expressie nog niet ondersteund")
 
-            elif isinstance(node.obj, PointerMemberAccessNode):
-                # Bijvoorbeeld:
-                #   p->data.length
-                struct_ptr = self._get_member_ptr(node.obj)
-            else:
-                raise NotImplementedError(
-                    f"Member access op complexe expressie nog niet ondersteund: {type(node.obj)}"
-                )
+            struct_ptr = self.variables[node.obj.name]
 
-            if not isinstance(struct_ptr.type, ir.PointerType):
-                raise TypeError("'.' verwacht een pointer naar een struct value")
-
+            # struct_ptr is normaal: %struct.Point*
             struct_type = struct_ptr.type.pointee
 
         # Case 2: ptr->x
         elif isinstance(node, PointerMemberAccessNode):
-            # Voor -> moet de linkerkant een pointerwaarde opleveren.
-            # self.visit(...) mag hier laden, want ptr->x betekent: laad ptr, daarna GEP.
+            # ptr->x:
+            # - als ptr een IdentifierNode is, self.visit(ptr) laadt de pointerwaarde
+            # - als ptr een MemberAccessNode is, bv a.next, self.visit(a.next) laadt ook de pointerwaarde
             struct_ptr = self.visit(node.ptr)
 
             if not isinstance(struct_ptr.type, ir.PointerType):
@@ -1789,10 +1766,9 @@ class LLVMGenerator:
             struct_type = struct_ptr.type.pointee
 
         else:
-            raise NotImplementedError(
-                f"Member pointer lookup niet ondersteund voor {type(node)}"
-            )
+            raise NotImplementedError(f"Member pointer lookup niet ondersteund voor {type(node)}")
 
+        # Zoek struct naam via LLVM type, bv %"struct.Point"
         # Eerst: normale struct member access via GEP
         struct_name = None
         for name, llvm_type in self.struct_types.items():
@@ -1800,6 +1776,10 @@ class LLVMGenerator:
                 struct_name = name
                 break
 
+        if struct_name is None:
+            raise TypeError("Kan struct type niet vinden voor member access")
+
+        members = self.struct_members[struct_name]
         if struct_name is not None:
             members = self.struct_members[struct_name]
 
