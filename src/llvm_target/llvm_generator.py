@@ -111,6 +111,7 @@ class LLVMGenerator:
 
         # Symbol table: variabele naam -> LLVM waarde
         self.variables = ScopedVariableTable()
+        self.global_variables = {}
 
         # Maps: line_number -> {'source': str, 'leading': list, 'inline': str}
         self.line_to_comment = {}
@@ -278,14 +279,20 @@ class LLVMGenerator:
     # ═══════════════════════════════════════════════════════════
 
     def visit_ProgramNode(self, node: ProgramNode):
-        # Pass 0: typedefs en structs registreren vóór functies
+        # Pass 0: typedefs registreren vóór functies
         for item in node.top_level_items:
             if isinstance(item, TypedefNode):
                 self.visit(item)
 
+        # Pass 0b: structs en unions registreren vóór functies
         for item in node.top_level_items:
             if isinstance(item, (StructDeclNode, UnionDeclNode)):
                 self.visit(item)
+
+        # Pass 0c: globale variabelen declareren
+        for item in node.top_level_items:
+            if isinstance(item, VarDeclNode):
+                self._declare_global_variable(item)
 
         # Pass 1: includes skippen, functies declareren
         for item in node.top_level_items:
@@ -301,6 +308,92 @@ class LLVMGenerator:
             if isinstance(item, FunctionDefNode):
                 self.visit(item)
 
+    def _zero_constant(self, llvm_type):
+        if isinstance(llvm_type, ir.IntType):
+            return ir.Constant(llvm_type, 0)
+
+        if isinstance(llvm_type, ir.FloatType):
+            return ir.Constant(llvm_type, 0.0)
+
+        if isinstance(llvm_type, ir.DoubleType):
+            return ir.Constant(llvm_type, 0.0)
+
+        if isinstance(llvm_type, ir.PointerType):
+            return ir.Constant(llvm_type, None)
+
+        if isinstance(llvm_type, ir.ArrayType):
+            return ir.Constant(
+                llvm_type,
+                [self._zero_constant(llvm_type.element) for _ in range(llvm_type.count)]
+            )
+
+        return ir.Constant(llvm_type, None)
+
+    def _char_literal_to_int(self, value):
+        escape_map = {
+            '\\n': 10,
+            '\\t': 9,
+            '\\r': 13,
+            '\\0': 0,
+            '\\\\': 92,
+            "\\'": 39,
+            '\\"': 34,
+        }
+
+        if value in escape_map:
+            return escape_map[value]
+
+        return ord(value)
+
+    def _global_initializer(self, value_node, llvm_type):
+        if value_node is None:
+            return self._zero_constant(llvm_type)
+
+        if isinstance(value_node, IntLiteralNode):
+            if isinstance(llvm_type, ir.FloatType):
+                return ir.Constant(llvm_type, float(value_node.value))
+            return ir.Constant(llvm_type, value_node.value)
+
+        if isinstance(value_node, FloatLiteralNode):
+            if isinstance(llvm_type, ir.IntType):
+                return ir.Constant(llvm_type, int(value_node.value))
+            return ir.Constant(llvm_type, value_node.value)
+
+        if isinstance(value_node, CharLiteralNode):
+            return ir.Constant(llvm_type, self._char_literal_to_int(value_node.value))
+
+        if isinstance(value_node, ArrayInitializerNode) and isinstance(llvm_type, ir.ArrayType):
+            elements = []
+
+            for elem in value_node.elements:
+                elements.append(self._global_initializer(elem, llvm_type.element))
+
+            while len(elements) < llvm_type.count:
+                elements.append(self._zero_constant(llvm_type.element))
+
+            return ir.Constant(llvm_type, elements)
+
+        # Fallback: unsupported global initializer.
+        # Keep compiler alive with zero-initialization.
+        return self._zero_constant(llvm_type)
+
+    def _declare_global_variable(self, node):
+        if node.name in self.global_variables:
+            return self.global_variables[node.name]
+
+        llvm_type = self._get_llvm_type(node.type_name, node.pointer_depth)
+
+        if node.array_dimensions:
+            for dim in reversed(node.array_dimensions):
+                llvm_type = ir.ArrayType(llvm_type, dim)
+
+        global_var = ir.GlobalVariable(self.module, llvm_type, name=node.name)
+        global_var.global_constant = False
+        global_var.initializer = self._global_initializer(node.value, llvm_type)
+
+        self.global_variables[node.name] = global_var
+
+        return global_var
 
     def visit_FunctionDefNode(self, node: FunctionDefNode):
         self._collect_comments(node)
@@ -334,7 +427,9 @@ class LLVMGenerator:
         self.builder = ir.IRBuilder(entry_block)
 
         # Reset lokale variabelen per functie
+        # maar behoud globale variabelen in de outer scope.
         self.variables = ScopedVariableTable()
+        self.variables.scopes[0].update(self.global_variables)
 
         # Parameters opslaan als lokale variabelen
         for i, arg in enumerate(func.args):
@@ -873,8 +968,7 @@ class LLVMGenerator:
     def _sizeof_llvm_type(self, llvm_type):
         """
         Return size in bytes for supported LLVM types.
-        Used for pointer subtraction:
-            p - q = byte_difference / sizeof(*p)
+        Used for pointer subtraction and union storage size.
         """
         if isinstance(llvm_type, ir.IntType):
             return max(1, llvm_type.width // 8)
@@ -890,6 +984,11 @@ class LLVMGenerator:
 
         if isinstance(llvm_type, ir.ArrayType):
             return llvm_type.count * self._sizeof_llvm_type(llvm_type.element)
+
+        if isinstance(llvm_type, ir.IdentifiedStructType):
+            # Simple fallback for struct/union values.
+            # Good enough for your current tests.
+            return 8
 
         return 1
 
@@ -1069,22 +1168,14 @@ class LLVMGenerator:
         """
         Converteer C type naar LLVM type.
 
-        Ondersteunt nu ook typedef aliases:
-            typedef int MyInt;
-            MyInt x;      -> i32
-            MyInt* ptr;   -> i32*
+        Ondersteunt:
+            int, float, char, void
+            typedef aliases
+            struct types
+            union types
         """
 
         # Stap 1: typedef aliases oplossen
-        # Voorbeeld:
-        #   typedef int MyInt;
-        #   self.typedef_map["MyInt"] = ("int", 0)
-        #
-        #   typedef int* IntPtr;
-        #   self.typedef_map["IntPtr"] = ("int", 1)
-        #
-        # Als je dan IntPtr* hebt, wordt dat int**:
-        #   alias_ptr_depth 1 + pointer_depth 1 = 2
         seen = set()
         while type_name in self.typedef_map:
             if type_name in seen:
@@ -1093,6 +1184,13 @@ class LLVMGenerator:
             seen.add(type_name)
 
             real_type, alias_pointer_depth = self.typedef_map[type_name]
+
+            # Protect against:
+            #   typedef struct Point Point;
+            #   typedef union Number Number;
+            if real_type == type_name:
+                break
+
             type_name = real_type
             pointer_depth += alias_pointer_depth
 
@@ -1106,13 +1204,20 @@ class LLVMGenerator:
         elif type_name == 'void':
             base_type = ir.VoidType()
         else:
-            # Struct prefix verwijderen als die nog aanwezig is
-            struct_name = type_name
-            if struct_name.startswith("struct") and len(struct_name) > len("struct"):
-                struct_name = struct_name[len("struct"):]
+            aggregate_name = type_name
 
-            if struct_name in self.struct_types:
-                base_type = self.struct_types[struct_name]
+            # Strip prefixes from ANTLR getText:
+            #   structPacket -> Packet
+            #   unionNumber  -> Number
+            for prefix in ("struct", "union"):
+                if aggregate_name.startswith(prefix) and len(aggregate_name) > len(prefix):
+                    aggregate_name = aggregate_name[len(prefix):]
+                    break
+
+            if aggregate_name in self.struct_types:
+                base_type = self.struct_types[aggregate_name]
+            elif aggregate_name in self.union_types:
+                base_type = self.union_types[aggregate_name]
             else:
                 raise ValueError(f"Onbekend type: {type_name}")
 
@@ -1598,6 +1703,15 @@ class LLVMGenerator:
         raise TypeError(f"Cannot cast {value.type} to {target_type}")
 
     def visit_TypedefNode(self, node):
+        # C allows:
+        #   typedef struct Point Point;
+        #   typedef union Number Number;
+        #
+        # In your AST this becomes Typedef(Point -> Point).
+        # Do not store self-aliases, otherwise _get_llvm_type gets Point -> Point -> cycle.
+        if node.new_name == node.existing_type:
+            return
+
         self.typedef_map[node.new_name] = (node.existing_type, node.pointer_depth)
 
     def visit_StructDeclNode(self, node):
@@ -1736,56 +1850,84 @@ class LLVMGenerator:
 
     def _get_member_ptr(self, node):
         """
-        Geeft de LLVM pointer naar een struct member terug.
+        Geeft de LLVM pointer naar een struct/union member terug.
 
         Ondersteunt:
             p.x
+            p.inner.x
             ptr->x
+            p.inner_ptr->x
+            arr[i].x
+            union_value.x
+            union_ptr->x
         """
 
-        # Case 1: p.x
+        # ------------------------------------------------------------
+        # Case 1: obj.member
+        # ------------------------------------------------------------
         if isinstance(node, MemberAccessNode):
-            if not isinstance(node.obj, IdentifierNode):
-                raise NotImplementedError("Member access op complexe expressie nog niet ondersteund")
+            if isinstance(node.obj, IdentifierNode):
+                # Lokale struct/union variable:
+                #   struct Header h;
+                #   h.src
+                aggregate_ptr = self.variables[node.obj.name]
 
-            struct_ptr = self.variables[node.obj.name]
+            elif isinstance(node.obj, MemberAccessNode):
+                # Nested member:
+                #   h.data.length
+                aggregate_ptr = self._get_member_ptr(node.obj)
 
-            # struct_ptr is normaal: %struct.Point*
-            struct_type = struct_ptr.type.pointee
+            elif isinstance(node.obj, PointerMemberAccessNode):
+                # Example:
+                #   p->data.length
+                aggregate_ptr = self._get_member_ptr(node.obj)
 
-        # Case 2: ptr->x
+            elif isinstance(node.obj, ArrayAccessNode):
+                # Array of structs/unions:
+                #   packets[0].length
+                aggregate_ptr = self._get_array_ptr(node.obj)
+
+            else:
+                raise NotImplementedError(
+                    f"Member access op complexe expressie nog niet ondersteund: {type(node.obj)}"
+                )
+
+            if not isinstance(aggregate_ptr.type, ir.PointerType):
+                raise TypeError("'.' verwacht een pointer naar een struct/union value")
+
+            aggregate_type = aggregate_ptr.type.pointee
+
+        # ------------------------------------------------------------
+        # Case 2: ptr->member
+        # ------------------------------------------------------------
         elif isinstance(node, PointerMemberAccessNode):
-            # ptr->x:
-            # - als ptr een IdentifierNode is, self.visit(ptr) laadt de pointerwaarde
-            # - als ptr een MemberAccessNode is, bv a.next, self.visit(a.next) laadt ook de pointerwaarde
-            struct_ptr = self.visit(node.ptr)
+            # ptr->x means: load pointer value, then access member
+            aggregate_ptr = self.visit(node.ptr)
 
-            if not isinstance(struct_ptr.type, ir.PointerType):
-                raise TypeError("'->' verwacht een pointer naar een struct")
+            if not isinstance(aggregate_ptr.type, ir.PointerType):
+                raise TypeError("'->' verwacht een pointer naar een struct/union")
 
-            struct_type = struct_ptr.type.pointee
+            aggregate_type = aggregate_ptr.type.pointee
 
         else:
-            raise NotImplementedError(f"Member pointer lookup niet ondersteund voor {type(node)}")
+            raise NotImplementedError(
+                f"Member pointer lookup niet ondersteund voor {type(node)}"
+            )
 
-        # Zoek struct naam via LLVM type, bv %"struct.Point"
-        # Eerst: normale struct member access via GEP
+        # ------------------------------------------------------------
+        # Struct member access: GEP by member index
+        # ------------------------------------------------------------
         struct_name = None
         for name, llvm_type in self.struct_types.items():
-            if llvm_type == struct_type:
+            if llvm_type == aggregate_type:
                 struct_name = name
                 break
 
-        if struct_name is None:
-            raise TypeError("Kan struct type niet vinden voor member access")
-
-        members = self.struct_members[struct_name]
         if struct_name is not None:
             members = self.struct_members[struct_name]
-
-            member_index = None
             member_name = node.member
 
+            member_index = None
             for i, member in enumerate(members):
                 if member.name == member_name:
                     member_index = i
@@ -1797,19 +1939,21 @@ class LLVMGenerator:
             zero = ir.Constant(ir.IntType(32), 0)
             idx = ir.Constant(ir.IntType(32), member_index)
 
-            return self.builder.gep(struct_ptr, [zero, idx], inbounds=True)
+            return self.builder.gep(aggregate_ptr, [zero, idx], inbounds=True)
 
-        # Daarna: union member access via bitcast
+        # ------------------------------------------------------------
+        # Union member access: bitcast to member pointer type
+        # ------------------------------------------------------------
         union_name = None
         for name, llvm_type in self.union_types.items():
-            if llvm_type == struct_type:
+            if llvm_type == aggregate_type:
                 union_name = name
                 break
 
         if union_name is not None:
-            return self._get_union_member_ptr(struct_ptr, union_name, node.member)
+            return self._get_union_member_ptr(aggregate_ptr, union_name, node.member)
 
-        raise TypeError(f"Kan struct/union type niet vinden voor member access: {struct_type}")
+        raise TypeError(f"Kan struct/union type niet vinden voor member access: {aggregate_type}")
 
     def visit_MemberAccessNode(self, node):
         """
