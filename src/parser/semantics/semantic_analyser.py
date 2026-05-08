@@ -1181,6 +1181,7 @@ class SemanticAnalyzer:
                 return underlying
 
         return None
+
     def _strip_aggregate_prefix(self, type_name: str) -> str:
         bare = type_name
 
@@ -1189,7 +1190,6 @@ class SemanticAnalyzer:
                 return bare[len(prefix):]
 
         return bare
-
 
     def _resolve_aggregate_name(self, type_name: str):
         """
@@ -1223,7 +1223,6 @@ class SemanticAnalyzer:
                 return ('union', underlying)
 
         return None
-
 
     def _get_aggregate_member_type(self, kind: str, aggregate_name: str, member_name: str):
         """
