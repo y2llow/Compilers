@@ -39,7 +39,7 @@ class SemanticAnalyzer:
         self.included_types = set()      # Types seeded from #include registries
         self.typedef_map = {}           # Maps typedef alias -> (underlying_type_name, pointer_depth)
         self.struct_members = {}         # Maps struct name -> list of StructMemberNode
-
+        self.union_members = {}         # Maps union name -> list of StructMemberNode
 
         # name -> [
         #   {
@@ -120,7 +120,7 @@ class SemanticAnalyzer:
 
         # 2. Typedefs en structs registreren zodat ze als geldige types gelden.
         for item in node.top_level_items:
-            if isinstance(item, (TypedefNode, StructDeclNode)):
+            if isinstance(item, (TypedefNode, StructDeclNode, UnionDeclNode)):
                 self.visit(item)
 
         # 3. Enum constants registreren als globale int constants.
@@ -186,7 +186,7 @@ class SemanticAnalyzer:
         # the struct/enum name is registered in known_types first, but aliasing
         # it to the same name is valid C and must not be treated as a conflict.
         underlying = node.existing_type
-        for prefix in ('struct', 'enum'):
+        for prefix in ('struct', 'enum', 'union'):
             if underlying.startswith(prefix):
                 underlying = underlying[len(prefix):]
                 break
@@ -214,6 +214,13 @@ class SemanticAnalyzer:
         self.struct_members[node.name] = node.members
 
         # Validate each member's type
+        for member in node.members:
+            self._validate_type_name_str(member.type_name, member)
+
+    def visit_UnionDeclNode(self, node):
+        self.known_types.add(node.name)
+        self.union_members[node.name] = node.members
+
         for member in node.members:
             self._validate_type_name_str(member.type_name, member)
 
@@ -686,7 +693,7 @@ class SemanticAnalyzer:
             return True
 
         # Strip 'enum'/'struct' prefix from ANTLR getText() concatenation
-        for prefix in ('enum', 'struct'):
+        for prefix in ('enum', 'struct', 'union'):
             if type_name.startswith(prefix) and len(type_name) > len(prefix):
                 return True
 
@@ -905,7 +912,7 @@ class SemanticAnalyzer:
 
     def visit_VarDeclNode(self, node):
         # Strip enum/struct prefix (ANTLR getText concatenates them)
-        for prefix in ('enum', 'struct'):
+        for prefix in ('enum', 'struct', 'union'):
             if node.type_name.startswith(prefix) and len(node.type_name) > len(prefix):
                 node.type_name = node.type_name[len(prefix):]
                 break
@@ -1175,6 +1182,60 @@ class SemanticAnalyzer:
 
         return None
 
+    def _strip_aggregate_prefix(self, type_name: str) -> str:
+        bare = type_name
+
+        for prefix in ('struct', 'union', 'enum'):
+            if bare.startswith(prefix) and len(bare) > len(prefix):
+                return bare[len(prefix):]
+
+        return bare
+
+    def _resolve_aggregate_name(self, type_name: str):
+        """
+        Return ('struct', name) of ('union', name), of None.
+        """
+        bare = self._strip_aggregate_prefix(type_name)
+
+        if bare in self.struct_members:
+            return ('struct', bare)
+
+        if bare in self.union_members:
+            return ('union', bare)
+
+        resolved = self._resolve_typedef(type_name)
+        resolved = self._strip_aggregate_prefix(resolved)
+
+        if resolved in self.struct_members:
+            return ('struct', resolved)
+
+        if resolved in self.union_members:
+            return ('union', resolved)
+
+        if type_name in self.typedef_map:
+            underlying, _ptr = self.typedef_map[type_name]
+            underlying = self._strip_aggregate_prefix(underlying)
+
+            if underlying in self.struct_members:
+                return ('struct', underlying)
+
+            if underlying in self.union_members:
+                return ('union', underlying)
+
+        return None
+
+    def _get_aggregate_member_type(self, kind: str, aggregate_name: str, member_name: str):
+        if kind == 'struct':
+            members = self.struct_members.get(aggregate_name, [])
+        else:
+            members = self.union_members.get(aggregate_name, [])
+
+        for member in members:
+            if member.name == member_name:
+                return (member.type_name, member.pointer_depth)
+
+        return None
+
     def _get_member_type(self, struct_name: str, member_name: str):
         """
         Look up a member by name in a struct and return (type_name, pointer_depth),
@@ -1372,21 +1433,28 @@ class SemanticAnalyzer:
             obj_type = self._get_expression_type(node.obj)
             if obj_type is None:
                 return None
-            struct_name = self._resolve_struct_name(obj_type[0])
-            if struct_name is None:
+
+            aggregate = self._resolve_aggregate_name(obj_type[0])
+            if aggregate is None:
                 return None
-            return self._get_member_type(struct_name, node.member)
+
+            kind, aggregate_name = aggregate
+            return self._get_aggregate_member_type(kind, aggregate_name, node.member)
 
         if isinstance(node, PointerMemberAccessNode):
             ptr_type = self._get_expression_type(node.ptr)
             if ptr_type is None:
                 return None
-            # ptr_type[1] is pointer depth; must be > 0 to use ->
-            struct_name = self._resolve_struct_name(ptr_type[0])
-            if struct_name is None:
-                return None
-            return self._get_member_type(struct_name, node.member)
 
+            if ptr_type[1] == 0:
+                return None
+
+            aggregate = self._resolve_aggregate_name(ptr_type[0])
+            if aggregate is None:
+                return None
+
+            kind, aggregate_name = aggregate
+            return self._get_aggregate_member_type(kind, aggregate_name, node.member)
         return None
 
     def _get_binary_op_type(self, node):
@@ -1571,20 +1639,24 @@ class SemanticAnalyzer:
         elif isinstance(node, MemberAccessNode):
             self._check_expression(node.obj)
             obj_type = self._get_expression_type(node.obj)
+
             if obj_type is not None:
-                struct_name = self._resolve_struct_name(obj_type[0])
-                if struct_name is None:
+                aggregate = self._resolve_aggregate_name(obj_type[0])
+
+                if aggregate is None:
                     self.add_error(
                         getattr(node, 'line', 0),
                         getattr(node, 'column', 0),
-                        f"Error: request for member '{node.member}' in something not a struct"
+                        f"Error: request for member '{node.member}' in something not a struct or union"
                     )
-                elif self._get_member_type(struct_name, node.member) is None:
-                    self.add_error(
-                        getattr(node, 'line', 0),
-                        getattr(node, 'column', 0),
-                        f"Error: struct '{struct_name}' has no member '{node.member}'"
-                    )
+                else:
+                    kind, aggregate_name = aggregate
+                    if self._get_aggregate_member_type(kind, aggregate_name, node.member) is None:
+                        self.add_error(
+                            getattr(node, 'line', 0),
+                            getattr(node, 'column', 0),
+                            f"Error: {kind} '{aggregate_name}' has no member '{node.member}'"
+                        )
 
         elif isinstance(node, PointerMemberAccessNode):
             self._check_expression(node.ptr)
@@ -1595,21 +1667,24 @@ class SemanticAnalyzer:
                         getattr(node, 'line', 0),
                         getattr(node, 'column', 0),
                         f"Error: '->' applied to non-pointer type '{ptr_type[0]}'"
+
                     )
                 else:
-                    struct_name = self._resolve_struct_name(ptr_type[0])
-                    if struct_name is None:
+                    aggregate = self._resolve_aggregate_name(ptr_type[0])
+                    if aggregate is None:
                         self.add_error(
                             getattr(node, 'line', 0),
                             getattr(node, 'column', 0),
-                            f"Error: request for member '{node.member}' in something not a struct"
+                            f"Error: request for member '{node.member}' in something not a pointer to struct or union"
                         )
-                    elif self._get_member_type(struct_name, node.member) is None:
-                        self.add_error(
-                            getattr(node, 'line', 0),
-                            getattr(node, 'column', 0),
-                            f"Error: struct '{struct_name}' has no member '{node.member}'"
-                        )
+                    else:
+                        kind, aggregate_name = aggregate
+                        if self._get_aggregate_member_type(kind, aggregate_name, node.member) is None:
+                            self.add_error(
+                                getattr(node, 'line', 0),
+                                getattr(node, 'column', 0),
+                                f"Error: {kind} '{aggregate_name}' has no member '{node.member}'"
+                            )
 
     def _check_identifier(self, node):
         symbol = self.symbol_table.lookup(node.name)

@@ -191,6 +191,22 @@ class StructDeclNode(ASTNode):
         members = ', '.join(repr(m) for m in self.members)
         return f"StructDecl({self.name}: [{members}])"
 
+class UnionDeclNode(ASTNode):
+    """
+    union <name> { <members> };
+    name   : str
+    members: list[StructMemberNode]
+    """
+
+    def __init__(self, name: str, members: list):
+        super().__init__()
+        self.name = name
+        self.members = members
+
+    def __repr__(self):
+        members = ', '.join(repr(m) for m in self.members)
+        return f"UnionDecl({self.name}: [{members}])"
+
 
 # ══════════════════════════════════════════════════════════════
 # FUNCTIONS

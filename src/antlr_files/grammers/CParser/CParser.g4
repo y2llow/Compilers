@@ -14,6 +14,7 @@ top_level_item
     | typedef_decl
     | enum_decl ';'
     | struct_decl ';'
+    | union_decl ';'
     | function_definition
     | function_declaration ';'
     | var_decl ';'
@@ -47,6 +48,7 @@ typedef_decl
     : TYPEDEF type_spec '*'* typedef_name ';'
     | TYPEDEF struct_specifier typedef_name ';'
     | TYPEDEF enum_specifier typedef_name ';'
+    | TYPEDEF union_specifier typedef_name ';'
     ;
 
 typedef_name
@@ -87,6 +89,24 @@ struct_member
     : type_spec '*'* IDENTIFIER array_dimension* ';'
     | enum_specifier IDENTIFIER ';'
     | struct_specifier IDENTIFIER ';'
+    | union_specifier IDENTIFIER ';'
+    ;
+
+// ── Union ─────────────────────────────────────────────────
+
+union_decl
+    : union_specifier
+    ;
+
+union_specifier
+    : UNION IDENTIFIER ('{' union_member* '}')?
+    ;
+
+union_member
+    : type_spec '*'* IDENTIFIER array_dimension* ';'
+    | enum_specifier IDENTIFIER ';'
+    | struct_specifier IDENTIFIER ';'
+    | union_specifier IDENTIFIER ';'
     ;
 
 // ── Functions ─────────────────────────────────────────────────
@@ -255,6 +275,7 @@ type_spec
     | IDENTIFIER
     | enum_specifier
     | struct_specifier
+    | union_specifier
     ;
 
 // ── Assignment ────────────────────────────────────────────────

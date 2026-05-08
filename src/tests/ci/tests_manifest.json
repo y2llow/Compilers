@@ -1423,6 +1423,61 @@
       "expected_stdout": "40",
       "expected_exit_code": 0
     },
+    {
+      "name": "a6_union_basic_dot_access",
+      "assignment": 6,
+      "file": "src/tests/ci/assignment_6_advanced_features/valid/11_union_basic_dot_acces.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a6_union_typedef_alias",
+      "assignment": 6,
+      "file": "src/tests/ci/assignment_6_advanced_features/valid/12_union_typedef_alias.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+        {
+      "name": "a6_union_typedef_alias_basic",
+      "assignment": 6,
+      "file": "src/tests/ci/assignment_6_advanced_features/valid/13_union_type_alias_basic.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a6_invalid_union_missing_member",
+      "assignment": 6,
+      "file": "src/tests/ci/assignment_6_advanced_features/invalid_semantic/07_union_missing_member.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]", "has no member"]
+    },
+    {
+      "name": "a6_runtime_union_basic_int",
+      "assignment": 6,
+      "file": "src/tests/ci/assignment_6_advanced_features/runtime/09_union_basic_int.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "",
+      "expected_exit_code": 5
+    },
+    {
+      "name": "a6_runtime_union_pointer_arrow",
+      "assignment": 6,
+      "file": "src/tests/ci/assignment_6_advanced_features/runtime/10_union_pointer_arrow.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "",
+      "expected_exit_code": 7
+    },
+    {
+      "name": "a6_runtime_union_big_combined",
+      "assignment": 6,
+      "file": "src/tests/ci/assignment_6_advanced_features/runtime/11_union_big_combined.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "78",
+      "expected_exit_code": 22
+    },
 
     {
       "name": "fp_01_symbol_table",

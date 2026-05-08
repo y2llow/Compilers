@@ -8,6 +8,7 @@ from parser.ast_nodes import (
     EnumDeclNode,
     StructMemberNode,
     StructDeclNode,
+    UnionDeclNode,
     ParameterNode,
     FunctionDeclNode,
     FunctionDefNode,
@@ -112,9 +113,16 @@ class ASTBuilder(CParserVisitor):
 
     def visitTranslation_unit(self, ctx):
         items = []
+
         for child in ctx.top_level_item():
             result = self.visit(child)
-            if result is not None:
+
+            if result is None:
+                continue
+
+            if isinstance(result, list):
+                items.extend(result)
+            else:
                 items.append(result)
 
         node = ProgramNode(items)
@@ -149,29 +157,106 @@ class ASTBuilder(CParserVisitor):
     def visitTypedef_decl(self, ctx):
         new_name = ctx.typedef_name().getText()
 
+        # ------------------------------------------------------------
+        # Special case:
+        # typedef union Value { int i; char c; float f; } Value;
+        #
+        # Because union_specifier is inside type_spec, ctx.type_spec()
+        # is true, so we must detect it before normal type_spec handling.
+        # ------------------------------------------------------------
+        if ctx.type_spec() and hasattr(ctx.type_spec(), "union_specifier") and ctx.type_spec().union_specifier():
+            union_ctx = ctx.type_spec().union_specifier()
+            existing_type = union_ctx.IDENTIFIER().getText()
+            pointer_depth = sum(
+                1 for i in range(ctx.getChildCount())
+                if ctx.getChild(i).getText() == '*'
+            )
+
+            if union_ctx.union_member():
+                members = [self.visit(m) for m in union_ctx.union_member()]
+
+                self.known_type_names.add(existing_type)
+                self.known_type_names.add(new_name)
+                self.typedef_map[new_name] = (existing_type, pointer_depth)
+
+                union_node = UnionDeclNode(existing_type, members)
+                union_node = self._attach_position(union_node, union_ctx)
+
+                typedef_node = TypedefNode(existing_type, pointer_depth, new_name)
+                typedef_node = self._attach_position(typedef_node, ctx)
+
+                return [union_node, typedef_node]
+
+            self.known_type_names.add(new_name)
+            self.typedef_map[new_name] = (existing_type, pointer_depth)
+
+            node = TypedefNode(existing_type, pointer_depth, new_name)
+            return self._attach_position(node, ctx)
+
+        # ------------------------------------------------------------
+        # Same idea for:
+        # typedef struct Point { int x; int y; } Point;
+        # ------------------------------------------------------------
+        if ctx.type_spec() and hasattr(ctx.type_spec(), "struct_specifier") and ctx.type_spec().struct_specifier():
+            struct_ctx = ctx.type_spec().struct_specifier()
+            existing_type = struct_ctx.IDENTIFIER().getText()
+            pointer_depth = sum(
+                1 for i in range(ctx.getChildCount())
+                if ctx.getChild(i).getText() == '*'
+            )
+
+            if struct_ctx.struct_member():
+                members = [self.visit(m) for m in struct_ctx.struct_member()]
+
+                self.known_type_names.add(existing_type)
+                self.known_type_names.add(new_name)
+                self.typedef_map[new_name] = (existing_type, pointer_depth)
+
+                struct_node = StructDeclNode(existing_type, members)
+                struct_node = self._attach_position(struct_node, struct_ctx)
+
+                typedef_node = TypedefNode(existing_type, pointer_depth, new_name)
+                typedef_node = self._attach_position(typedef_node, ctx)
+
+                return [struct_node, typedef_node]
+
+            self.known_type_names.add(new_name)
+            self.typedef_map[new_name] = (existing_type, pointer_depth)
+
+            node = TypedefNode(existing_type, pointer_depth, new_name)
+            return self._attach_position(node, ctx)
+
+        # ------------------------------------------------------------
+        # Normal typedefs
+        # ------------------------------------------------------------
         if ctx.type_spec():
             existing_type = ctx.type_spec().getText()
             pointer_depth = sum(
                 1 for i in range(ctx.getChildCount())
                 if ctx.getChild(i).getText() == '*'
             )
+
         elif ctx.struct_specifier():
             existing_type = ctx.struct_specifier().IDENTIFIER().getText()
             pointer_depth = 0
+
         elif ctx.enum_specifier():
             existing_type = ctx.enum_specifier().IDENTIFIER().getText()
             pointer_depth = 0
+
+        elif hasattr(ctx, "union_specifier") and ctx.union_specifier():
+            existing_type = ctx.union_specifier().IDENTIFIER().getText()
+            pointer_depth = 0
+
         else:
             existing_type = 'int'
             pointer_depth = 0
 
-        # Register so visitVar_decl can resolve the pointer ambiguity
         self.known_type_names.add(new_name)
-        self.typedef_map[new_name] = (existing_type, pointer_depth)  # ← ADD THIS LINE
-        node = TypedefNode(existing_type, pointer_depth, new_name)
-        return self._attach_position(node, ctx)
+        self.typedef_map[new_name] = (existing_type, pointer_depth)
 
-    # ?? Enum ??????????????????????????????????????????????????
+        node = TypedefNode(existing_type, pointer_depth, new_name)
+        return self._attach_position(node, ctx)    # ?? Enum ??????????????????????????????????????????????????
 
     def visitEnum_decl(self, ctx):
         return self.visit(ctx.enum_specifier())
@@ -226,8 +311,63 @@ class ASTBuilder(CParserVisitor):
             type_name = ctx.enum_specifier().IDENTIFIER().getText()
         elif ctx.struct_specifier():
             type_name = ctx.struct_specifier().IDENTIFIER().getText()
+        elif ctx.union_specifier():
+            type_name = ctx.union_specifier().IDENTIFIER().getText()
         else:
             type_name = 'int'
+
+        pointer_depth = sum(
+            1 for i in range(ctx.getChildCount())
+            if ctx.getChild(i).getText() == '*'
+        )
+
+        array_dimensions = []
+        if ctx.array_dimension():
+            for dim_ctx in ctx.array_dimension():
+                integer_token = dim_ctx.INTEGER()
+                if integer_token is not None:
+                    array_dimensions.append(int(integer_token.getText()))
+
+        node = StructMemberNode(type_name, pointer_depth, name, array_dimensions)
+        return self._attach_position(node, ctx)
+
+    # ?? Union ?????????????????????????????????????????????????????
+
+    def visitUnion_decl(self, ctx):
+        return self.visit(ctx.union_specifier())
+
+    def visitUnion_specifier(self, ctx):
+        name = ctx.IDENTIFIER().getText()
+
+        members = []
+        if ctx.union_member():
+            members = [self.visit(m) for m in ctx.union_member()]
+
+        # Register so pointer-to-union vars can be recognised
+        self.known_type_names.add(name)
+
+        node = UnionDeclNode(name, members)
+        return self._attach_position(node, ctx)
+
+    def visitUnion_member(self, ctx):
+        name = ctx.IDENTIFIER().getText()
+
+        if ctx.type_spec():
+            type_name = ctx.type_spec().getText()
+        elif ctx.enum_specifier():
+            type_name = ctx.enum_specifier().IDENTIFIER().getText()
+        elif ctx.struct_specifier():
+            type_name = ctx.struct_specifier().IDENTIFIER().getText()
+        elif ctx.union_specifier():
+            type_name = ctx.union_specifier().IDENTIFIER().getText()
+        else:
+            type_name = 'int'
+
+        # Strip possible ANTLR getText() prefixes like structPoint / unionData
+        for prefix in ('enum', 'struct', 'union'):
+            if type_name.startswith(prefix) and len(type_name) > len(prefix):
+                type_name = type_name[len(prefix):]
+                break
 
         pointer_depth = sum(
             1 for i in range(ctx.getChildCount())
@@ -478,7 +618,7 @@ class ASTBuilder(CParserVisitor):
         type_name = ctx.type_spec().getText()
 
         # Strip 'enum'/'struct' prefix added by ANTLR getText() concatenation
-        for prefix in ('enum', 'struct'):
+        for prefix in ('enum', 'struct', 'union'):
             if type_name.startswith(prefix) and len(type_name) > len(prefix):
                 type_name = type_name[len(prefix):]
                 break

@@ -14,6 +14,7 @@ from parser.ast_nodes import (
     TypedefNode,
     StructDeclNode,
     StructMemberNode,
+    UnionDeclNode,
     MemberAccessNode,
     PointerMemberAccessNode,
     FunctionDeclNode,
@@ -125,6 +126,9 @@ class LLVMGenerator:
         self.typedef_map = {}
         self.struct_types = {}
         self.struct_members = {}
+
+        self.union_types = {}
+        self.union_members = {}
 
         # Original source name -> list of LLVM overload declarations.
         # LLVM itself cannot contain multiple globals named @add, so overloaded
@@ -280,7 +284,7 @@ class LLVMGenerator:
                 self.visit(item)
 
         for item in node.top_level_items:
-            if isinstance(item, StructDeclNode):
+            if isinstance(item, (StructDeclNode, UnionDeclNode)):
                 self.visit(item)
 
         # Pass 1: includes skippen, functies declareren
@@ -866,6 +870,9 @@ class LLVMGenerator:
         if isinstance(llvm_type, ir.ArrayType):
             return llvm_type.count * self._sizeof_llvm_type(llvm_type.element)
 
+        if isinstance(llvm_type, ir.IdentifiedStructType):
+            return 8
+
         return 1
 
     def visit_BinaryOpNode(self, node: BinaryOpNode):
@@ -1068,6 +1075,13 @@ class LLVMGenerator:
             seen.add(type_name)
 
             real_type, alias_pointer_depth = self.typedef_map[type_name]
+
+            # Protect against self-alias:
+            #   typedef struct Point Point;
+            #   typedef union Value Value;
+            if real_type == type_name:
+                break
+
             type_name = real_type
             pointer_depth += alias_pointer_depth
 
@@ -1080,14 +1094,20 @@ class LLVMGenerator:
             base_type = ir.IntType(8)
         elif type_name == 'void':
             base_type = ir.VoidType()
-        else:
-            # Struct prefix verwijderen als die nog aanwezig is
-            struct_name = type_name
-            if struct_name.startswith("struct") and len(struct_name) > len("struct"):
-                struct_name = struct_name[len("struct"):]
 
-            if struct_name in self.struct_types:
-                base_type = self.struct_types[struct_name]
+        else:
+            # Struct/union prefix verwijderen als die nog aanwezig is
+            aggregate_name = type_name
+
+            for prefix in ("struct", "union"):
+                if aggregate_name.startswith(prefix) and len(aggregate_name) > len(prefix):
+                    aggregate_name = aggregate_name[len(prefix):]
+                    break
+
+            if aggregate_name in self.struct_types:
+                base_type = self.struct_types[aggregate_name]
+            elif aggregate_name in self.union_types:
+                base_type = self.union_types[aggregate_name]
             else:
                 raise ValueError(f"Onbekend type: {type_name}")
 
@@ -1573,6 +1593,10 @@ class LLVMGenerator:
         raise TypeError(f"Cannot cast {value.type} to {target_type}")
 
     def visit_TypedefNode(self, node):
+
+        if node.new_name == node.existing_type:
+            return
+
         self.typedef_map[node.new_name] = (node.existing_type, node.pointer_depth)
 
     def visit_StructDeclNode(self, node):
@@ -1623,6 +1647,91 @@ class LLVMGenerator:
         llvm_struct_type.set_body(*member_types)
 
         return llvm_struct_type
+
+    def visit_UnionDeclNode(self, node):
+        """
+        Registreer een C union als LLVM identified type.
+
+        C union:
+            union U {
+                int i;
+                float f;
+            };
+
+        In een union beginnen alle members op offset 0.
+        Daarom maken we GEEN LLVM struct met alle members naast elkaar.
+        We maken opslag als byte-array met grootte van de grootste member:
+
+            %"union.U" = type { [N x i8] }
+        """
+
+        union_name = node.name
+
+        if union_name in self.union_types:
+            return self.union_types[union_name]
+
+        llvm_union_type = self.module.context.get_identified_type(
+            f"union.{union_name}"
+        )
+
+        self.union_types[union_name] = llvm_union_type
+        self.union_members[union_name] = node.members
+
+        max_size = 1
+
+        for member in node.members:
+            member_type = self._get_llvm_type(
+                member.type_name,
+                member.pointer_depth
+            )
+
+            if getattr(member, "array_dimensions", None):
+                for dim in reversed(member.array_dimensions):
+                    member_type = ir.ArrayType(member_type, dim)
+
+            max_size = max(max_size, self._sizeof_llvm_type(member_type))
+
+        storage_type = ir.ArrayType(ir.IntType(8), max_size)
+
+        # Eén veld: [N x i8]
+        llvm_union_type.set_body(storage_type)
+
+        return llvm_union_type
+
+    def _get_union_member_ptr(self, union_ptr, union_name, member_name):
+        """
+        Geeft pointer naar een union member.
+
+        In C:
+            union U u;
+            u.i = 5;
+
+        Alle members zitten op offset 0.
+        LLVM-oplossing:
+            bitcast %union.U* naar <member_type>*
+        """
+
+        members = self.union_members.get(union_name, [])
+
+        target_member = None
+        for member in members:
+            if member.name == member_name:
+                target_member = member
+                break
+
+        if target_member is None:
+            raise TypeError(f"Union '{union_name}' heeft geen member '{member_name}'")
+
+        member_type = self._get_llvm_type(
+            target_member.type_name,
+            target_member.pointer_depth
+        )
+
+        if getattr(target_member, "array_dimensions", None):
+            for dim in reversed(target_member.array_dimensions):
+                member_type = ir.ArrayType(member_type, dim)
+
+        return self.builder.bitcast(union_ptr, member_type.as_pointer())
 
     def _get_member_ptr(self, node):
         """
@@ -1684,33 +1793,43 @@ class LLVMGenerator:
                 f"Member pointer lookup niet ondersteund voor {type(node)}"
             )
 
-        # Zoek struct naam via LLVM type, bv %"struct.Packet"
+        # Eerst: normale struct member access via GEP
         struct_name = None
         for name, llvm_type in self.struct_types.items():
             if llvm_type == struct_type:
                 struct_name = name
                 break
 
-        if struct_name is None:
-            raise TypeError(f"Kan struct type niet vinden voor member access: {struct_type}")
+        if struct_name is not None:
+            members = self.struct_members[struct_name]
 
-        members = self.struct_members[struct_name]
+            member_index = None
+            member_name = node.member
 
-        member_index = None
-        member_name = node.member
+            for i, member in enumerate(members):
+                if member.name == member_name:
+                    member_index = i
+                    break
 
-        for i, member in enumerate(members):
-            if member.name == member_name:
-                member_index = i
+            if member_index is None:
+                raise TypeError(f"Struct '{struct_name}' heeft geen member '{member_name}'")
+
+            zero = ir.Constant(ir.IntType(32), 0)
+            idx = ir.Constant(ir.IntType(32), member_index)
+
+            return self.builder.gep(struct_ptr, [zero, idx], inbounds=True)
+
+        # Daarna: union member access via bitcast
+        union_name = None
+        for name, llvm_type in self.union_types.items():
+            if llvm_type == struct_type:
+                union_name = name
                 break
 
-        if member_index is None:
-            raise TypeError(f"Struct '{struct_name}' heeft geen member '{member_name}'")
+        if union_name is not None:
+            return self._get_union_member_ptr(struct_ptr, union_name, node.member)
 
-        zero = ir.Constant(ir.IntType(32), 0)
-        idx = ir.Constant(ir.IntType(32), member_index)
-
-        return self.builder.gep(struct_ptr, [zero, idx], inbounds=True)
+        raise TypeError(f"Kan struct/union type niet vinden voor member access: {struct_type}")
 
     def visit_MemberAccessNode(self, node):
         """
