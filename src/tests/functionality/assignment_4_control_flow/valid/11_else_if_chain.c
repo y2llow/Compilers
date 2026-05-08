@@ -4,10 +4,12 @@ int main() {
 
     if (x == 1) {
         result = 10;
-    } else if (x == 2) {
-        result = 20;
     } else {
-        result = 30;
+        if (x == 2) {
+            result = 20;
+        } else {
+            result = 30;
+        }
     }
 
     return result;

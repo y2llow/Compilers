@@ -159,7 +159,6 @@ for_statement
 
 control_body
     : compound_statement
-    | statement
     ;
 
 for_init

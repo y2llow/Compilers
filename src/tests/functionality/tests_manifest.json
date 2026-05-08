@@ -295,6 +295,13 @@
   "contains": ["[Semantic Error]", "already declared"]
 },
     {
+  "name": "a4_invalid_if_without_braces",
+  "assignment": 4,
+  "file": "src/tests/functionality/assignment_4_control_flow/invalid_syntax/05_if_without_braces.c",
+  "expect": "syntax_error",
+  "contains": ["[Syntax Error]"]
+},
+    {
   "name": "a4_runtime_if_else",
   "assignment": 4,
   "file": "src/tests/functionality/assignment_4_control_flow/runtime/01_runtime_if_else.c",
