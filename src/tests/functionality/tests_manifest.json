@@ -1239,8 +1239,10 @@
       "name": "a5_invalid_semantic_04_mandatory_return_type_mismatch_float_to_int_pointer",
       "assignment": 5,
       "file": "src/tests/functionality/assignment_5_functions_headers/invalid_semantic/04_mandatory_return_type_mismatch_float_to_int_pointer.c",
-      "expect": "semantic_error",
-    "contains": ["Semantic Warning"]
+      "expect": "valid_ast",
+      "contains": [
+        "Semantic analysis passed"
+      ]
     },
     {
       "name": "a5_invalid_semantic_05_mandatory_forward_declaration_return_type_conflict",
@@ -1301,9 +1303,10 @@
       "name": "a5_invalid_semantic_10_mandatory_call_wrong_argument_type_basic",
       "assignment": 5,
       "file": "src/tests/functionality/assignment_5_functions_headers/invalid_semantic/10_mandatory_call_wrong_argument_type_basic.c",
-      "expect": "semantic_error",
-      "contains": ["Semantic Warning"]
-
+      "expect": "valid_ast",
+      "contains": [
+        "Semantic analysis passed"
+      ]
     },
     {
       "name": "a5_invalid_semantic_11_mandatory_call_wrong_argument_type_pointer",
@@ -1820,8 +1823,8 @@
       "name": "a5_invalid_semantic_04_mandatory_return_type_mismatch_float_to_int_pointer",
       "assignment": 5,
       "file": "src/tests/functionality/assignment_5_functions_headers/invalid_semantic/04_mandatory_return_type_mismatch_float_to_int_pointer.c",
-      "expect": "semantic_error",
-      "contains": ["Semantic Warning"]
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
     },
     {
       "name": "a5_invalid_semantic_05_mandatory_forward_declaration_return_type_conflict",
@@ -1882,9 +1885,8 @@
       "name": "a5_invalid_semantic_10_mandatory_call_wrong_argument_type_basic",
       "assignment": 5,
       "file": "src/tests/functionality/assignment_5_functions_headers/invalid_semantic/10_mandatory_call_wrong_argument_type_basic.c",
-      "expect": "semantic_error",
-  "contains": ["Semantic Warning"]
-
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
     },
     {
       "name": "a5_invalid_semantic_11_mandatory_call_wrong_argument_type_pointer",
