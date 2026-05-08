@@ -1175,17 +1175,38 @@ class SemanticAnalyzer:
 
         return None
 
-    def _get_member_type(self, struct_name: str, member_name: str):
+    def _get_member_type(self, struct_name, member_name):
         """
-        Look up a member by name in a struct and return (type_name, pointer_depth),
-        or None if the member does not exist.
+        Return type info for a struct member.
+
+        Format:
+            (base_type, pointer_depth)
+        or for array members:
+            (base_type, pointer_depth, True, dimensions)
+
+        This is needed for:
+            struct Bag { int values[3]; };
+            b.values[0] = 2;
         """
-        members = self.struct_members.get(struct_name)
-        if members is None:
-            return None
-        for m in members:
-            if m.name == member_name:
-                return (m.type_name, m.pointer_depth)
+        members = self.struct_members.get(struct_name, [])
+
+        for member in members:
+            if member.name == member_name:
+                base_type = member.type_name
+
+                # Normalize enum/struct prefix if needed
+                for prefix in ('enum', 'struct'):
+                    if isinstance(base_type, str) and base_type.startswith(prefix) and len(base_type) > len(prefix):
+                        base_type = base_type[len(prefix):]
+                        break
+
+                dims = getattr(member, "array_dimensions", []) or []
+
+                if dims:
+                    return (base_type, member.pointer_depth, True, dims)
+
+                return (base_type, member.pointer_depth)
+
         return None
 
     def _resolve_typedef(self, type_name: str) -> str:
@@ -1381,7 +1402,8 @@ class SemanticAnalyzer:
             ptr_type = self._get_expression_type(node.ptr)
             if ptr_type is None:
                 return None
-            # ptr_type[1] is pointer depth; must be > 0 to use ->
+            if ptr_type[1] == 0:
+                return None
             struct_name = self._resolve_struct_name(ptr_type[0])
             if struct_name is None:
                 return None

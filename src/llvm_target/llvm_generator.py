@@ -442,41 +442,29 @@ class LLVMGenerator:
         return self.builder.load(elem_ptr)
 
     def _get_array_ptr(self, node):
-        """
-        Geeft de pointer naar een array-element terug zonder te laden.
-
-        Ondersteunt:
-        - lokale arrays: int values[3]
-        - pointer parameters: int* arr
-        - geneste array access: matrix[i][j]
-        """
         zero = ir.Constant(ir.IntType(32), 0)
 
         if isinstance(node, IdentifierNode):
-            var_ptr = self.variables[node.name]
+            var_ptr = self._lookup_var_ptr(node.name)
 
-            # Lokale array: var_ptr is bv [3 x i32]*
             if isinstance(var_ptr.type.pointee, ir.ArrayType):
                 return var_ptr
 
-            # Pointer variable/parameter:
-            # var_ptr is bv i32**, dus eerst loaden naar i32*
             if isinstance(var_ptr.type.pointee, ir.PointerType):
                 return self.builder.load(var_ptr)
 
             return var_ptr
 
+        if isinstance(node, (MemberAccessNode, PointerMemberAccessNode)):
+            return self._get_member_ptr(node)
+
         if isinstance(node, ArrayAccessNode):
             base_ptr = self._get_array_ptr(node.array)
             index = self.visit(node.index)
 
-            # Als base_ptr naar een echte LLVM array wijst: [N x T]*
-            # dan heb je GEP [0, index] nodig.
             if isinstance(base_ptr.type.pointee, ir.ArrayType):
                 return self.builder.gep(base_ptr, [zero, index], inbounds=True)
 
-            # Als base_ptr een gewone pointer is: T*
-            # dan heb je GEP [index] nodig.
             return self.builder.gep(base_ptr, [index], inbounds=True)
 
         raise NotImplementedError(f"Array pointer lookup not supported for {type(node)}")
@@ -1066,6 +1054,14 @@ class LLVMGenerator:
         #
         # Als je dan IntPtr* hebt, wordt dat int**:
         #   alias_ptr_depth 1 + pointer_depth 1 = 2
+
+        # Normalize enum types.
+        # ANTLR getText() can produce "enumKind" for "enum Kind".
+        # In this compiler, enums are represented as int.
+        if isinstance(type_name, str):
+            if type_name.startswith("enum") and len(type_name) > len("enum"):
+                type_name = "int"
+
         seen = set()
         while type_name in self.typedef_map:
             if type_name in seen:
