@@ -2094,6 +2094,15 @@
       "expected_stdout": ""
     },
     {
+      "name": "a5_optional_09_big_dead_code_showcase",
+      "assignment": 5,
+      "file": "src/tests/functionality/assignment_5_functions_headers/optional/09_optional_big_dead_code_showcase.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "",
+      "expected_exit_code": 11
+    },
+    {
       "name": "a6_valid_01_mandatory_typedef_basic",
       "assignment": 6,
       "file": "src/tests/functionality/assignment_6_advanced_features/valid/01_mandatory_typedef_basic.c",
