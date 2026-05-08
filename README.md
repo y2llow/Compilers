@@ -185,6 +185,86 @@ python -m src.main --input input_file.c --render_ast ast.dot --no-fold
 - ISO C90 mixed declarations warning
 
 ---
+Here's the full README content you can copy:
+
+---
+
+# C Compiler — Compilers Project 2025-2026
+
+## Feature Implementation Status
+
+---
+
+## Project 1: Expressions
+
+All mandatory features implemented.
+
+**Optional features:** None listed in assignment.
+
+---
+
+## Project 2: Types and Variables
+
+All mandatory features implemented.
+
+**Optional features:**
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Const casting (non-const pointer to const value) | ✗ NOT IMPLEMENTED | Semantic analyzer enforces const pointer compatibility strictly |
+
+---
+
+## Project 3: Comments, Arrays, I/O, LLVM IR
+
+All mandatory features implemented.
+
+**Optional features:**
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Dynamic arrays on the heap (malloc/free) | ✗ NOT IMPLEMENTED | Only stack-allocated arrays via alloca are supported |
+
+---
+
+## Project 4: Loops, Conditionals, and Scopes
+
+All mandatory features implemented.
+
+**Optional features:**
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| else if statements | ✓ IMPLEMENTED | Grammar rule `else control_body` where control_body can be another if_statement — full else-if chaining works |
+| switch / case / break / default | ✓ IMPLEMENTED | Full support: grammar, AST nodes (SwitchNode, SwitchCaseNode, SwitchDefaultNode), semantic analysis (break context, no direct var decl in case), and LLVM IR generation |
+
+---
+
+## Project 5: Functions and Headers
+
+All mandatory features implemented.
+
+**Optional features:**
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Function overloading | ✗ NOT IMPLEMENTED | Functions are keyed by name only in the function registry |
+| Include guards (#ifndef / #define / #endif) | ✓ IMPLEMENTED | `IncludeHandler._extract_include_guard()` detects and `_strip_include_guard()` removes guard wrappers. Prevents double-inclusion via `self.defined_guards` set |
+| Dead code elimination — unused variables | ✓ IMPLEMENTED | `DeadCodeEliminator` with `unused_vars=True`. Removes unused `VarDeclNodes` when initialiser is side-effect free |
+| Dead code elimination — dead conditionals | ✓ IMPLEMENTED | `DeadCodeEliminator` with `dead_conditionals=True`. Eliminates `if(0)`, `while(0)`, `for(;0;)` after `ConstantFolder` reduces conditions to integer literals |
+| Check all paths in non-void function return | ✗ NOT IMPLEMENTED | Missing return paths are not detected |
+
+---
+
+## Summary
+
+| Project | Mandatory | Optionals Implemented | Optionals Not Implemented |
+|---------|-----------|----------------------|--------------------------|
+| Project 1: Expressions | All | None (none listed) | — |
+| Project 2: Types & Variables | All | None | Const casting |
+| Project 3: Arrays, I/O, LLVM | All | None | Dynamic arrays (malloc) |
+| Project 4: Loops & Scopes | All | else if, switch/case/default | — |
+| Project 5: Functions & Headers | All | Include guards, Unused-var DCE, Dead-conditional DCE | Function overloading, Missing-return check |
 
 ## Example C Files
 

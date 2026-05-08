@@ -86,6 +86,11 @@ class LLVMGenerator:
         self.struct_types = {}
         self.struct_members = {}
 
+        # Original source name -> list of LLVM overload declarations.
+        # LLVM itself cannot contain multiple globals named @add, so overloaded
+        # source functions are emitted as e.g. @add__int__int.
+        self.function_overloads = {}
+
     # ═══════════════════════════════════════════════════════════
     # PUBLIC API
     # ═══════════════════════════════════════════════════════════
@@ -276,7 +281,8 @@ class LLVMGenerator:
             )
             param_types.append(llvm_param_type)
 
-        func = self.module.globals.get(node.name)
+        llvm_name = getattr(node, 'mangled_name', self._mangled_function_name(node.name, self._param_signature(node.params)))
+        func = self.module.globals.get(llvm_name)
         if func is None:
             func = self._declare_function(node)
 
@@ -1261,24 +1267,98 @@ class LLVMGenerator:
         self.builder.call(scanf, args)
 
     def visit_FunctionCallNode(self, node):
-        func = self.module.globals.get(node.name)
+        args = []
+        for arg in node.args:
+            args.append(self.visit(arg))
+
+        # Semantic analysis resolves overloaded calls and stores mangled_name.
+        # Fallback resolution is kept for direct LLVM-generator use in tests.
+        llvm_name = getattr(node, 'mangled_name', None)
+        if llvm_name is None:
+            llvm_name = self._resolve_overloaded_llvm_name(node.name, args)
+
+        func = self.module.globals.get(llvm_name)
 
         if func is None:
-            raise RuntimeError(f"Function '{node.name}' not found in LLVM module")
-
-        args = []
+            raise RuntimeError(f"Function '{node.name}' / '{llvm_name}' not found in LLVM module")
 
         expected_arg_types = list(func.function_type.args)
-
-        for i, arg in enumerate(node.args):
-            value = self.visit(arg)
-
+        casted_args = []
+        for i, value in enumerate(args):
             if i < len(expected_arg_types):
                 value = self._cast_value(value, expected_arg_types[i])
+            casted_args.append(value)
 
-            args.append(value)
+        return self.builder.call(func, casted_args)
 
-        return self.builder.call(func, args)
+    def _param_signature(self, params):
+        result = []
+        for p in params:
+            dims = tuple(getattr(p, 'array_dimensions', []) or [])
+            result.append((p.type_name, p.pointer_depth, dims))
+        return result
+
+    def _type_suffix(self, type_name, pointer_depth=0, dims=()):
+        safe = str(type_name).replace(' ', '_').replace('*', 'ptr')
+        suffix = safe + ('_ptr' * int(pointer_depth or 0))
+        if dims:
+            suffix += '_arr' + '_'.join(str(d) for d in dims)
+        return suffix
+
+    def _mangled_function_name(self, name, params):
+        if name == 'main':
+            return name
+        if not params:
+            return f"{name}__void"
+        return name + '__' + '__'.join(
+            self._type_suffix(t, p, d) for (t, p, d) in params
+        )
+
+    def _conversion_score_llvm(self, value_type, target_type):
+        if value_type == target_type:
+            return 0
+
+        if isinstance(value_type, ir.PointerType) or isinstance(target_type, ir.PointerType):
+            if isinstance(value_type, ir.PointerType) and isinstance(target_type, ir.PointerType):
+                return 1
+            return None
+
+        if isinstance(value_type, ir.IntType) and isinstance(target_type, ir.IntType):
+            return 1
+        if isinstance(value_type, ir.IntType) and isinstance(target_type, ir.FloatType):
+            return 1
+        if isinstance(value_type, ir.FloatType) and isinstance(target_type, ir.IntType):
+            return 1
+
+        return None
+
+    def _resolve_overloaded_llvm_name(self, source_name, arg_values):
+        overloads = self.function_overloads.get(source_name, [])
+        same_count = [f for f in overloads if len(f.function_type.args) == len(arg_values)]
+
+        matches = []
+        for func in same_count:
+            score = 0
+            ok = True
+            for value, target_type in zip(arg_values, func.function_type.args):
+                s = self._conversion_score_llvm(value.type, target_type)
+                if s is None:
+                    ok = False
+                    break
+                score += s
+            if ok:
+                matches.append((score, func))
+
+        if not matches:
+            raise RuntimeError(f"No matching overload for function '{source_name}'")
+
+        matches.sort(key=lambda item: item[0])
+        best_score = matches[0][0]
+        best = [func for score, func in matches if score == best_score]
+        if len(best) > 1:
+            raise RuntimeError(f"Ambiguous overload call to function '{source_name}'")
+
+        return best[0].name
 
     def _get_function_return_type(self, node):
         if node.return_type == "int" and node.return_ptr == 0:
@@ -1307,18 +1387,27 @@ class LLVMGenerator:
     def _declare_function(self, node):
         """
         Maakt alleen de LLVM function header aan.
-        Als de functie al bestaat, hergebruiken we die.
+        Overloaded C functions receive unique LLVM names.
         """
 
-        existing = self.module.globals.get(node.name)
+        param_signature = self._param_signature(node.params)
+        llvm_name = getattr(node, 'mangled_name', self._mangled_function_name(node.name, param_signature))
+        node.mangled_name = llvm_name
+
+        existing = self.module.globals.get(llvm_name)
         if existing is not None:
+            self.function_overloads.setdefault(node.name, [])
+            if existing not in self.function_overloads[node.name]:
+                self.function_overloads[node.name].append(existing)
             return existing
 
         return_type = self._get_function_return_type(node)
         param_types = self._get_function_param_types(node)
 
         func_type = ir.FunctionType(return_type, param_types)
-        return ir.Function(self.module, func_type, name=node.name)
+        func = ir.Function(self.module, func_type, name=llvm_name)
+        self.function_overloads.setdefault(node.name, []).append(func)
+        return func
 
     def _cast_value(self, value, target_type):
         """
