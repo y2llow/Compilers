@@ -1681,6 +1681,43 @@
       "contains": ["Semantic analysis passed"],
       "expected_stdout": "",
       "expected_exit_code": 20
+    },
+    {
+      "name": "a6_valid_union_member_type_checking",
+      "assignment": 6,
+      "file": "src/tests/ci/assignment_6_advanced_features/valid/14_union_member_type_checking.c",
+      "expect": "valid_ast",
+      "contains": ["Semantic analysis passed"]
+    },
+    {
+      "name": "a6_invalid_union_missing_member_type_check",
+      "assignment": 6,
+      "file": "src/tests/ci/assignment_6_advanced_features/invalid_semantic/11_union_missing_member_type_check.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]", "has no member"]
+    },
+    {
+      "name": "a6_invalid_union_arrow_on_non_pointer",
+      "assignment": 6,
+      "file": "src/tests/ci/assignment_6_advanced_features/invalid_semantic/12_union_arrow_on_non_pointer.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]", "applied to non-pointer"]
+    },
+    {
+      "name": "a6_invalid_union_pointer_assignment_type",
+      "assignment": 6,
+      "file": "src/tests/ci/assignment_6_advanced_features/invalid_semantic/10_union_pointer_assignment_type.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]", "incompatible types"]
+    },
+    {
+      "name": "a6_runtime_union_member_type_checking",
+      "assignment": 6,
+      "file": "src/tests/ci/assignment_6_advanced_features/runtime/16_union_member_type_checking.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "",
+      "expected_exit_code": 12
     }
   ]
 }

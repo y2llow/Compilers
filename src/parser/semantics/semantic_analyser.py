@@ -1151,6 +1151,80 @@ class SemanticAnalyzer:
     # Type helpers
     # ============================================================
 
+    def _strip_aggregate_prefix(self, type_name: str) -> str:
+        bare = type_name
+
+        for prefix in ('struct', 'union', 'enum'):
+            if isinstance(bare, str) and bare.startswith(prefix) and len(bare) > len(prefix):
+                return bare[len(prefix):]
+
+        return bare
+
+    def _resolve_aggregate_name(self, type_name: str):
+        """
+        Return ('struct', name) of ('union', name), of None.
+        """
+        bare = self._strip_aggregate_prefix(type_name)
+
+        if bare in self.struct_members:
+            return ('struct', bare)
+
+        if bare in self.union_members:
+            return ('union', bare)
+
+        resolved = self._resolve_typedef(type_name)
+        resolved = self._strip_aggregate_prefix(resolved)
+
+        if resolved in self.struct_members:
+            return ('struct', resolved)
+
+        if resolved in self.union_members:
+            return ('union', resolved)
+
+        if type_name in self.typedef_map:
+            underlying, _ptr = self.typedef_map[type_name]
+            underlying = self._strip_aggregate_prefix(underlying)
+
+            if underlying in self.struct_members:
+                return ('struct', underlying)
+
+            if underlying in self.union_members:
+                return ('union', underlying)
+
+        return None
+
+    def _get_aggregate_member_type(self, kind: str, aggregate_name: str, member_name: str):
+        """
+        Return type info for a struct/union member.
+
+        Format:
+            (base_type, pointer_depth)
+
+        or for array members:
+            (base_type, pointer_depth, True, dimensions)
+        """
+        if kind == 'struct':
+            members = self.struct_members.get(aggregate_name, [])
+        else:
+            members = self.union_members.get(aggregate_name, [])
+
+        for member in members:
+            if member.name == member_name:
+                base_type = self._strip_aggregate_prefix(member.type_name)
+                dims = getattr(member, "array_dimensions", []) or []
+
+                if dims:
+                    return (base_type, member.pointer_depth, True, dims)
+
+                return (base_type, member.pointer_depth)
+
+        return None
+
+    def _get_member_type(self, struct_name, member_name):
+        """
+        Backwards-compatible wrapper for old struct-only code.
+        """
+        return self._get_aggregate_member_type('struct', struct_name, member_name)
 
     def _resolve_struct_name(self, type_name: str) -> str:
         """
@@ -1307,12 +1381,14 @@ class SemanticAnalyzer:
 
         Voorbeeld:
             structNode -> Node
+            unionValue -> Value
             Node       -> Node
         """
         resolved = self._resolve_typedef(type_name)
 
-        if resolved.startswith("struct") and len(resolved) > len("struct"):
-            return resolved[len("struct"):]
+        for prefix in ("struct", "union", "enum"):
+            if isinstance(resolved, str) and resolved.startswith(prefix) and len(resolved) > len(prefix):
+                return resolved[len(prefix):]
 
         return resolved
 
