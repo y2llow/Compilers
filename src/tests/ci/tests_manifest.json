@@ -377,7 +377,7 @@
       "assignment": 3,
       "file": "src/tests/ci/assignment_3_arrays_io_llvm/invalid_semantic/01_array_initializer_wrong_size.c",
       "expect": "semantic_error",
-      "contains": ["[Semantic Error]", "array initializer size mismatch"]
+      "contains": ["[Semantic Error]", "array initializer has length"]
     },
     {
       "name": "a3_invalid_array_index_float",
@@ -398,7 +398,7 @@
       "assignment": 3,
       "file": "src/tests/ci/assignment_3_arrays_io_llvm/invalid_semantic/04_array_initializer_for_non_array.c",
       "expect": "semantic_error",
-      "contains": ["[Semantic Error]", "array initializer for non-array"]
+      "contains": ["[Semantic Error]", "array initializer used for non-array variable"]
     },
     {
       "name": "a3_invalid_printf_without_stdio",
@@ -427,6 +427,13 @@
       "file": "src/tests/ci/assignment_3_arrays_io_llvm/invalid_semantic/08_scanf_wrong_arg_count.c",
       "expect": "semantic_error",
       "contains": ["[Semantic Error]", "format expects"]
+    },
+    {
+      "name": "a3_invalid_nested_array_initializer_wrong_length",
+      "assignment": 3,
+      "file": "src/tests/ci/assignment_3_arrays_io_llvm/invalid_semantic/09_nested_array_initializer_wrong_length.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]", "array initializer has length 2, expected 3"]
     },
     {
       "name": "a3_invalid_bad_array_declaration",
@@ -468,6 +475,33 @@
       "contains": ["Semantic analysis passed"],
       "expected_stdout": "5",
       "expected_exit_code": 0
+    },
+    {
+      "name": "a3_runtime_printf_percent_escape",
+      "assignment": 3,
+      "file": "src/tests/ci/assignment_3_arrays_io_llvm/runtime/04_printf_percent_escape.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "Progress: 100%",
+      "expected_exit_code": 0
+    },
+    {
+      "name": "a3_runtime_string_pointer_printf",
+      "assignment": 3,
+      "file": "src/tests/ci/assignment_3_arrays_io_llvm/runtime/05_string_pointer_printf.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "hello",
+      "expected_exit_code": 0
+    },
+    {
+      "name": "a3_runtime_nested_array_initializer_ok",
+      "assignment": 3,
+      "file": "src/tests/ci/assignment_3_arrays_io_llvm/runtime/06_nested_array_initializer_ok.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "",
+      "expected_exit_code": 7
     },
     {
       "name": "a4_valid_if_else_basic",

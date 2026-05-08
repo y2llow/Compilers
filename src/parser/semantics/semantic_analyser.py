@@ -723,30 +723,85 @@ class SemanticAnalyzer:
     # ============================================================
 
     def _check_array_initializer(self, var_decl, initializer):
-        if not var_decl.array_dimensions:
+        """
+        Check array initializers recursively.
+
+        Examples:
+            int a[3] = {1, 2, 3};              OK
+            int m[2][3] = {{1,2,3},{4,5,6}};  OK
+            int x = {1, 2, 3};                ERROR
+        """
+        dimensions = getattr(var_decl, "array_dimensions", [])
+
+        if not dimensions:
             self.add_error(
-                getattr(initializer, 'line', 0),
-                getattr(initializer, 'column', 0),
-                f"Error: array initializer for non-array variable '{var_decl.name}'"
+                getattr(initializer, 'line', getattr(var_decl, 'line', 0)),
+                getattr(initializer, 'column', getattr(var_decl, 'column', 0)),
+                f"Error: array initializer used for non-array variable '{var_decl.name}'"
             )
             return
 
-        expected_size = var_decl.array_dimensions[0]
-        actual_size = len(initializer.elements)
+        self._check_array_initializer_recursive(
+            initializer=initializer,
+            dimensions=dimensions,
+            level=0,
+            node=var_decl
+        )
 
-        if actual_size != expected_size:
+    def _check_array_initializer_recursive(self, initializer, dimensions, level, node):
+        """
+        Recursive check voor multidimensionale array initializers.
+        dimensions = [2, 3] voor int matrix[2][3]
+        level 0 checkt aantal rijen
+        level 1 checkt aantal elementen per rij
+        """
+        if not isinstance(initializer, ArrayInitializerNode):
             self.add_error(
-                getattr(initializer, 'line', 0),
-                getattr(initializer, 'column', 0),
-                f"Error: array initializer size mismatch for '{var_decl.name}': expected {expected_size}, got {actual_size}"
+                getattr(node, 'line', 0),
+                getattr(node, 'column', 0),
+                "Error: array initializer must use braces"
             )
+            return
+
+        expected_len = dimensions[level]
+        actual_len = len(initializer.elements)
+
+        if actual_len != expected_len:
+            self.add_error(
+                getattr(initializer, 'line', getattr(node, 'line', 0)),
+                getattr(initializer, 'column', getattr(node, 'column', 0)),
+                f"Error: array initializer has length {actual_len}, expected {expected_len}"
+            )
+            return
+
+        is_last_dimension = level == len(dimensions) - 1
 
         for elem in initializer.elements:
-            if isinstance(elem, ArrayInitializerNode):
-                # Recursieve checks voor nested arrays kunnen later uitgebreider.
-                self.visit_ArrayInitializerNode(elem)
+            if is_last_dimension:
+                # Laatste dimensie: hier verwachten we gewone expressies, geen nested initializer
+                if isinstance(elem, ArrayInitializerNode):
+                    self.add_error(
+                        getattr(elem, 'line', getattr(node, 'line', 0)),
+                        getattr(elem, 'column', getattr(node, 'column', 0)),
+                        "Error: too many nested braces in array initializer"
+                    )
+                else:
+                    self._check_expression(elem)
             else:
-                self._check_expression(elem)
+                # Nog niet laatste dimensie: elk element moet opnieuw een initializer zijn
+                if not isinstance(elem, ArrayInitializerNode):
+                    self.add_error(
+                        getattr(elem, 'line', getattr(node, 'line', 0)),
+                        getattr(elem, 'column', getattr(node, 'column', 0)),
+                        "Error: missing nested braces in multidimensional array initializer"
+                    )
+                else:
+                    self._check_array_initializer_recursive(
+                        initializer=elem,
+                        dimensions=dimensions,
+                        level=level + 1,
+                        node=node
+                    )
 
     # ============================================================
     # Type helpers
