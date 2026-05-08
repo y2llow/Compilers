@@ -1,0 +1,12 @@
+{
+  "tests": [
+    {
+  "name": "a1_valid_binary_arithmetic",
+  "assignment": 1,
+  "file": "src/tests/functionality/assignment_1_expressions/valid/01_binary_arithmetic.c",
+  "expect": "valid_ast",
+  "contains": ["Semantic analysis passed"]
+    }
+  ]
+
+}
