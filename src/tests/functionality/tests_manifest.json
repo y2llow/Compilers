@@ -132,6 +132,275 @@
   "file": "src/tests/functionality/assignment_1_expressions/invalid_semantic/01_undeclared_identifier_expression.c",
   "expect": "semantic_error",
   "contains": ["[Semantic Error]", "not declared"]
+},
+    {
+  "name": "a4_valid_if_else",
+  "assignment": 4,
+  "file": "src/tests/functionality/assignment_4_control_flow/valid/01_if_else.c",
+  "expect": "valid_ast",
+  "contains": ["Semantic analysis passed"]
+},
+    {
+  "name": "a4_valid_while_loop",
+  "assignment": 4,
+  "file": "src/tests/functionality/assignment_4_control_flow/valid/02_while_loop.c",
+  "expect": "valid_ast",
+  "contains": ["Semantic analysis passed"]
+},
+    {
+  "name": "a4_valid_for_loop",
+  "assignment": 4,
+  "file": "src/tests/functionality/assignment_4_control_flow/valid/03_for_loop.c",
+  "expect": "valid_ast",
+  "contains": ["Semantic analysis passed"]
+},
+    {
+  "name": "a4_valid_break_in_loop",
+  "assignment": 4,
+  "file": "src/tests/functionality/assignment_4_control_flow/valid/04_break_in_loop.c",
+  "expect": "valid_ast",
+  "contains": ["Semantic analysis passed"]
+},
+    {
+  "name": "a4_valid_continue_in_loop",
+  "assignment": 4,
+  "file": "src/tests/functionality/assignment_4_control_flow/valid/05_continue_in_loop.c",
+  "expect": "valid_ast",
+  "contains": ["Semantic analysis passed"]
+},
+    {
+  "name": "a4_valid_anonymous_scope_shadowing",
+  "assignment": 4,
+  "file": "src/tests/functionality/assignment_4_control_flow/valid/06_anonymous_scope_shadowing.c",
+  "expect": "valid_ast",
+  "contains": ["Semantic analysis passed"]
+},
+    {
+  "name": "a4_valid_switch_case_default",
+  "assignment": 4,
+  "file": "src/tests/functionality/assignment_4_control_flow/valid/07_switch_case_default.c",
+  "expect": "valid_ast",
+  "contains": ["Semantic analysis passed"]
+},
+    {
+  "name": "a4_valid_enum_constants",
+  "assignment": 4,
+  "file": "src/tests/functionality/assignment_4_control_flow/valid/08_enum_constants.c",
+  "expect": "valid_ast",
+  "contains": ["Semantic analysis passed"]
+},
+    {
+  "name": "a4_valid_nested_control_flow",
+  "assignment": 4,
+  "file": "src/tests/functionality/assignment_4_control_flow/valid/09_nested_control_flow.c",
+  "expect": "valid_ast",
+  "contains": ["Semantic analysis passed"]
+},
+    {
+  "name": "a4_valid_switch_case_with_scope",
+  "assignment": 4,
+  "file": "src/tests/functionality/assignment_4_control_flow/valid/10_switch_case_with_scope.c",
+  "expect": "valid_ast",
+  "contains": ["Semantic analysis passed"]
+},
+    {
+  "name": "a4_valid_else_if_chain",
+  "assignment": 4,
+  "file": "src/tests/functionality/assignment_4_control_flow/valid/11_else_if_chain.c",
+  "expect": "valid_ast",
+  "contains": ["Semantic analysis passed"]
+},
+    {
+  "name": "a4_valid_switch_with_enum",
+  "assignment": 4,
+  "file": "src/tests/functionality/assignment_4_control_flow/valid/12_switch_with_enum.c",
+  "expect": "valid_ast",
+  "contains": ["Semantic analysis passed"]
+},
+    {
+  "name": "a4_valid_for_loop_with_init_declaration",
+  "assignment": 4,
+  "file": "src/tests/functionality/assignment_4_control_flow/valid/13_for_loop_with_init_declaration.c",
+  "expect": "valid_ast",
+  "contains": ["Semantic analysis passed"]
+},
+    {
+  "name": "a4_valid_nested_loops_break_continue",
+  "assignment": 4,
+  "file": "src/tests/functionality/assignment_4_control_flow/valid/14_nested_loops_break_continue.c",
+  "expect": "valid_ast",
+  "contains": ["Semantic analysis passed"]
+},
+    {
+  "name": "a4_invalid_while_missing_condition",
+  "assignment": 4,
+  "file": "src/tests/functionality/assignment_4_control_flow/invalid_syntax/01_while_missing_condition.c",
+  "expect": "syntax_error",
+  "contains": ["[Syntax Error]"]
+},
+    {
+  "name": "a4_invalid_for_missing_semicolon",
+  "assignment": 4,
+  "file": "src/tests/functionality/assignment_4_control_flow/invalid_syntax/02_for_missing_semicolon.c",
+  "expect": "syntax_error",
+  "contains": ["[Syntax Error]"]
+},
+    {
+  "name": "a4_invalid_switch_missing_parentheses",
+  "assignment": 4,
+  "file": "src/tests/functionality/assignment_4_control_flow/invalid_syntax/03_switch_missing_parentheses.c",
+  "expect": "syntax_error",
+  "contains": ["[Syntax Error]"]
+},
+    {
+  "name": "a4_invalid_case_missing_colon",
+  "assignment": 4,
+  "file": "src/tests/functionality/assignment_4_control_flow/invalid_syntax/04_case_missing_colon.c",
+  "expect": "syntax_error",
+  "contains": ["[Syntax Error]"]
+},
+    {
+  "name": "a4_invalid_break_outside_loop_or_switch",
+  "assignment": 4,
+  "file": "src/tests/functionality/assignment_4_control_flow/invalid_semantic/01_break_outside_loop_or_switch.c",
+  "expect": "semantic_error",
+  "contains": ["[Semantic Error]", "break", "not within loop or switch"]
+},
+    {
+  "name": "a4_invalid_continue_outside_loop",
+  "assignment": 4,
+  "file": "src/tests/functionality/assignment_4_control_flow/invalid_semantic/02_continue_outside_loop.c",
+  "expect": "semantic_error",
+  "contains": ["[Semantic Error]", "continue", "not within loop"]
+},
+    {
+  "name": "a4_invalid_switch_case_direct_variable_declaration",
+  "assignment": 4,
+  "file": "src/tests/functionality/assignment_4_control_flow/invalid_semantic/03_switch_case_direct_variable_declaration.c",
+  "expect": "semantic_error",
+  "contains": ["[Semantic Error]", "variable declaration", "switch case"]
+},
+    {
+  "name": "a4_invalid_redeclaration_same_scope",
+  "assignment": 4,
+  "file": "src/tests/functionality/assignment_4_control_flow/invalid_semantic/04_redeclaration_same_scope.c",
+  "expect": "semantic_error",
+  "contains": ["[Semantic Error]", "already declared"]
+},
+    {
+  "name": "a4_invalid_enum_constant_redeclaration",
+  "assignment": 4,
+  "file": "src/tests/functionality/assignment_4_control_flow/invalid_semantic/05_enum_constant_redeclaration.c",
+  "expect": "semantic_error",
+  "contains": ["[Semantic Error]", "already declared"]
+},
+    {
+  "name": "a4_runtime_if_else",
+  "assignment": 4,
+  "file": "src/tests/functionality/assignment_4_control_flow/runtime/01_runtime_if_else.c",
+  "expect": "runtime",
+  "contains": ["Semantic analysis passed"],
+  "expected_stdout": "",
+  "expected_exit_code": 10
+},
+    {
+  "name": "a4_runtime_while_loop",
+  "assignment": 4,
+  "file": "src/tests/functionality/assignment_4_control_flow/runtime/02_runtime_while_loop.c",
+  "expect": "runtime",
+  "contains": ["Semantic analysis passed"],
+  "expected_stdout": "",
+  "expected_exit_code": 5
+},
+    {
+  "name": "a4_runtime_for_loop_sum",
+  "assignment": 4,
+  "file": "src/tests/functionality/assignment_4_control_flow/runtime/03_runtime_for_loop_sum.c",
+  "expect": "runtime",
+  "contains": ["Semantic analysis passed"],
+  "expected_stdout": "",
+  "expected_exit_code": 10
+},
+    {
+  "name": "a4_runtime_break",
+  "assignment": 4,
+  "file": "src/tests/functionality/assignment_4_control_flow/runtime/04_runtime_break.c",
+  "expect": "runtime",
+  "contains": ["Semantic analysis passed"],
+  "expected_stdout": "",
+  "expected_exit_code": 4
+},
+    {
+  "name": "a4_runtime_continue",
+  "assignment": 4,
+  "file": "src/tests/functionality/assignment_4_control_flow/runtime/05_runtime_continue.c",
+  "expect": "runtime",
+  "contains": ["Semantic analysis passed"],
+  "expected_stdout": "",
+  "expected_exit_code": 12
+},
+    {
+  "name": "a4_runtime_anonymous_scope_shadowing",
+  "assignment": 4,
+  "file": "src/tests/functionality/assignment_4_control_flow/runtime/06_runtime_anonymous_scope_shadowing.c",
+  "expect": "runtime",
+  "contains": ["Semantic analysis passed"],
+  "expected_stdout": "",
+  "expected_exit_code": 3
+},
+    {
+  "name": "a4_runtime_switch_case_default",
+  "assignment": 4,
+  "file": "src/tests/functionality/assignment_4_control_flow/runtime/07_runtime_switch_case_default.c",
+  "expect": "runtime",
+  "contains": ["Semantic analysis passed"],
+  "expected_stdout": "",
+  "expected_exit_code": 20
+},
+    {
+  "name": "a4_runtime_switch_default",
+  "assignment": 4,
+  "file": "src/tests/functionality/assignment_4_control_flow/runtime/08_runtime_switch_default.c",
+  "expect": "runtime",
+  "contains": ["Semantic analysis passed"],
+  "expected_stdout": "",
+  "expected_exit_code": 30
+},
+    {
+  "name": "a4_runtime_enum_values",
+  "assignment": 4,
+  "file": "src/tests/functionality/assignment_4_control_flow/runtime/09_runtime_enum_values.c",
+  "expect": "runtime",
+  "contains": ["Semantic analysis passed"],
+  "expected_stdout": "",
+  "expected_exit_code": 3
+},
+    {
+  "name": "a4_runtime_switch_with_enum",
+  "assignment": 4,
+  "file": "src/tests/functionality/assignment_4_control_flow/runtime/10_runtime_switch_with_enum.c",
+  "expect": "runtime",
+  "contains": ["Semantic analysis passed"],
+  "expected_stdout": "",
+  "expected_exit_code": 3
+},
+    {
+  "name": "a4_runtime_nested_loops_break_continue",
+  "assignment": 4,
+  "file": "src/tests/functionality/assignment_4_control_flow/runtime/11_runtime_nested_loops_break_continue.c",
+  "expect": "runtime",
+  "contains": ["Semantic analysis passed"],
+  "expected_stdout": "",
+  "expected_exit_code": 15
+},
+    {
+  "name": "a4_runtime_switch_fallthrough",
+  "assignment": 4,
+  "file": "src/tests/functionality/assignment_4_control_flow/runtime/12_runtime_switch_fallthrough.c",
+  "expect": "runtime",
+  "contains": ["Semantic analysis passed"],
+  "expected_stdout": "",
+  "expected_exit_code": 30
 }
   ]
 
