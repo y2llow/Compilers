@@ -1181,15 +1181,15 @@ class SemanticAnalyzer:
                 return underlying
 
         return None
-
     def _strip_aggregate_prefix(self, type_name: str) -> str:
         bare = type_name
 
         for prefix in ('struct', 'union', 'enum'):
-            if bare.startswith(prefix) and len(bare) > len(prefix):
+            if isinstance(bare, str) and bare.startswith(prefix) and len(bare) > len(prefix):
                 return bare[len(prefix):]
 
         return bare
+
 
     def _resolve_aggregate_name(self, type_name: str):
         """
@@ -1224,7 +1224,17 @@ class SemanticAnalyzer:
 
         return None
 
+
     def _get_aggregate_member_type(self, kind: str, aggregate_name: str, member_name: str):
+        """
+        Return type info for a struct/union member.
+
+        Format:
+            (base_type, pointer_depth)
+
+        or for array members:
+            (base_type, pointer_depth, True, dimensions)
+        """
         if kind == 'struct':
             members = self.struct_members.get(aggregate_name, [])
         else:
@@ -1232,21 +1242,18 @@ class SemanticAnalyzer:
 
         for member in members:
             if member.name == member_name:
-                return (member.type_name, member.pointer_depth)
+                base_type = member.type_name
 
-        return None
+                # Normalize enum/struct/union prefix if needed
+                base_type = self._strip_aggregate_prefix(base_type)
 
-    def _get_member_type(self, struct_name: str, member_name: str):
-        """
-        Look up a member by name in a struct and return (type_name, pointer_depth),
-        or None if the member does not exist.
-        """
-        members = self.struct_members.get(struct_name)
-        if members is None:
-            return None
-        for m in members:
-            if m.name == member_name:
-                return (m.type_name, m.pointer_depth)
+                dims = getattr(member, "array_dimensions", []) or []
+
+                if dims:
+                    return (base_type, member.pointer_depth, True, dims)
+
+                return (base_type, member.pointer_depth)
+
         return None
 
     def _resolve_typedef(self, type_name: str) -> str:
@@ -1455,6 +1462,7 @@ class SemanticAnalyzer:
 
             kind, aggregate_name = aggregate
             return self._get_aggregate_member_type(kind, aggregate_name, node.member)
+
         return None
 
     def _get_binary_op_type(self, node):
