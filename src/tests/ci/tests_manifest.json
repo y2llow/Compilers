@@ -163,6 +163,24 @@
       "contains": ["Semantic analysis passed"]
     },
     {
+      "name": "a2_valid_pointer_arithmetic",
+      "assignment": 2,
+      "file": "src/tests/ci/assignment_2_types_variables/valid/08_ptr_arithmetic_ok.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "",
+      "expected_exit_code": 122
+    },
+    {
+      "name": "a2_valid_const_pointer_reassign",
+      "assignment": 2,
+      "file": "src/tests/ci/assignment_2_types_variables/valid/09_const_pointer_reassign_ok.c",
+      "expect": "runtime",
+      "contains": ["Semantic analysis passed"],
+      "expected_stdout": "",
+      "expected_exit_code": 2
+    },
+    {
       "name": "a2_invalid_undeclared_variable",
       "assignment": 2,
       "file": "src/tests/ci/assignment_2_types_variables/invalid_semantic/01_undeclared_variable.c",
@@ -210,6 +228,13 @@
       "file": "src/tests/ci/assignment_2_types_variables/invalid_semantic/07_missing_main.c",
       "expect": "semantic_error",
       "contains": ["[Semantic Error]", "missing", "main"]
+    },
+    {
+      "name": "a2_invalid_const_pointer_write",
+      "assignment": 2,
+      "file": "src/tests/ci/assignment_2_types_variables/invalid_semantic/12_const_pointer_write_error.c",
+      "expect": "semantic_error",
+      "contains": ["[Semantic Error]", "read-only location"]
     },
     {
       "name": "a2_invalid_bad_declaration",

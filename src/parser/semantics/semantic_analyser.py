@@ -1003,11 +1003,32 @@ class SemanticAnalyzer:
         left_base, left_ptr = left_type[0], left_type[1]
         right_base, right_ptr = right_type[0], right_type[1]
 
-        #  Resolve typedef aliases
         left_base = self._resolve_typedef(left_base)
         right_base = self._resolve_typedef(right_base)
 
+        # Comparisons always produce int
+        if node.op in ('==', '!=', '<', '>', '<=', '>='):
+            return ('int', 0)
+
+        # Pointer arithmetic
         if left_ptr > 0 or right_ptr > 0:
+            # pointer - pointer -> int difference
+            if left_ptr > 0 and right_ptr > 0 and node.op == '-':
+                return ('int', 0)
+
+            # pointer + int -> pointer
+            if left_ptr > 0 and right_ptr == 0 and right_base in ('int', 'char') and node.op == '+':
+                return (left_base, left_ptr)
+
+            # pointer - int -> pointer
+            if left_ptr > 0 and right_ptr == 0 and right_base in ('int', 'char') and node.op == '-':
+                return (left_base, left_ptr)
+
+            # int + pointer -> pointer
+            if right_ptr > 0 and left_ptr == 0 and left_base in ('int', 'char') and node.op == '+':
+                return (right_base, right_ptr)
+
+            # Everything else involving pointers has no valid result type
             return None
 
         if left_base == 'float' or right_base == 'float':
@@ -1268,43 +1289,85 @@ class SemanticAnalyzer:
         right_base, right_ptr = right_type[0], right_type[1]
 
         if left_ptr > 0 or right_ptr > 0:
+            left_base_norm = self._normalize_type_name_for_compare(left_base)
+            right_base_norm = self._normalize_type_name_for_compare(right_base)
+
+            # pointer comparisons
             if op in ('==', '!=', '<', '>', '<=', '>='):
                 if (left_ptr > 0 and right_ptr == 0) or (left_ptr == 0 and right_ptr > 0):
-                    self.add_warning(
-                        getattr(node, 'line', 0),
-                        getattr(node, 'column', 0),
-                        "Warning: comparison between pointer and integer"
-                    )
+                    # p == 0 is allowed, but warn for non-zero integer comparisons
+                    other_node = node.right if left_ptr > 0 else node.left
+                    if not (isinstance(other_node, IntLiteralNode) and other_node.value == 0):
+                        self.add_warning(
+                            getattr(node, 'line', 0),
+                            getattr(node, 'column', 0),
+                            "Warning: comparison between pointer and integer"
+                        )
 
-                elif left_ptr > 0 and right_ptr > 0 and left_base != right_base:
-                    self.add_warning(
-                        getattr(node, 'line', 0),
-                        getattr(node, 'column', 0),
-                        "Warning: comparison of distinct pointer types lacks a cast"
-                    )
+                elif left_ptr > 0 and right_ptr > 0:
+                    if left_ptr != right_ptr or left_base_norm != right_base_norm:
+                        self.add_warning(
+                            getattr(node, 'line', 0),
+                            getattr(node, 'column', 0),
+                            "Warning: comparison of distinct pointer types lacks a cast"
+                        )
+                return
 
-            elif op in ('+', '-'):
+            # pointer + int, int + pointer, pointer - int
+            if op in ('+', '-'):
+                # pointer - pointer is allowed, result is int
                 if left_ptr > 0 and right_ptr > 0:
+                    if op == '-':
+                        if left_ptr != right_ptr or left_base_norm != right_base_norm:
+                            self.add_warning(
+                                getattr(node, 'line', 0),
+                                getattr(node, 'column', 0),
+                                "Warning: subtraction of distinct pointer types"
+                            )
+                        return
+
                     self.add_error(
                         getattr(node, 'line', 0),
                         getattr(node, 'column', 0),
                         f"Error: invalid operands to binary {op}"
                     )
+                    return
 
-                elif left_ptr > 0 and right_base == 'float':
+                # pointer +/- integer
+                if left_ptr > 0 and right_ptr == 0:
+                    if right_base not in ('int', 'char'):
+                        self.add_error(
+                            getattr(node, 'line', 0),
+                            getattr(node, 'column', 0),
+                            f"Error: invalid pointer arithmetic with non-integer type '{right_base}'"
+                        )
+                    return
+
+                # integer + pointer is allowed
+                if right_ptr > 0 and left_ptr == 0 and op == '+':
+                    if left_base not in ('int', 'char'):
+                        self.add_error(
+                            getattr(node, 'line', 0),
+                            getattr(node, 'column', 0),
+                            f"Error: invalid pointer arithmetic with non-integer type '{left_base}'"
+                        )
+                    return
+
+                # integer - pointer is not allowed
+                if right_ptr > 0 and left_ptr == 0 and op == '-':
                     self.add_error(
                         getattr(node, 'line', 0),
                         getattr(node, 'column', 0),
-                        f"Error: invalid operands to binary {op}"
+                        "Error: invalid operands to binary -"
                     )
+                    return
 
-                elif right_ptr > 0 and left_base == 'float':
-                    self.add_error(
-                        getattr(node, 'line', 0),
-                        getattr(node, 'column', 0),
-                        f"Error: invalid operands to binary {op}"
-                    )
-
+            # Other pointer operations are invalid
+            self.add_error(
+                getattr(node, 'line', 0),
+                getattr(node, 'column', 0),
+                f"Error: invalid operands to binary {op}"
+            )
             return
 
         if left_base == 'void' or right_base == 'void':

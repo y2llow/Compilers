@@ -782,18 +782,68 @@ class LLVMGenerator:
             return self.builder.gep(var_ptr, [zero, zero], inbounds=True)
         return self.builder.load(var_ptr, name=node.name)
 
+    def _sizeof_llvm_type(self, llvm_type):
+        """
+        Return size in bytes for supported LLVM types.
+        Used for pointer subtraction:
+            p - q = byte_difference / sizeof(*p)
+        """
+        if isinstance(llvm_type, ir.IntType):
+            return max(1, llvm_type.width // 8)
+
+        if isinstance(llvm_type, ir.FloatType):
+            return 4
+
+        if isinstance(llvm_type, ir.DoubleType):
+            return 8
+
+        if isinstance(llvm_type, ir.PointerType):
+            return 8
+
+        if isinstance(llvm_type, ir.ArrayType):
+            return llvm_type.count * self._sizeof_llvm_type(llvm_type.element)
+
+        return 1
+
     def visit_BinaryOpNode(self, node: BinaryOpNode):
         left = self.visit(node.left)
         right = self.visit(node.right)
 
         # Pointer arithmetic
-        if isinstance(left.type, ir.PointerType) and node.op == '+':
+
+        # pointer - pointer -> int element difference
+        if isinstance(left.type, ir.PointerType) and isinstance(right.type, ir.PointerType) and node.op == '-':
+            intptr_t = ir.IntType(64)
+
+            left_int = self.builder.ptrtoint(left, intptr_t)
+            right_int = self.builder.ptrtoint(right, intptr_t)
+
+            byte_diff = self.builder.sub(left_int, right_int)
+
+            elem_size = self._sizeof_llvm_type(left.type.pointee)
+            elem_size_const = ir.Constant(intptr_t, elem_size)
+
+            element_diff_64 = self.builder.sdiv(byte_diff, elem_size_const)
+
+            return self.builder.trunc(element_diff_64, ir.IntType(32))
+
+        # pointer + int -> pointer
+        if isinstance(left.type, ir.PointerType) and not isinstance(right.type, ir.PointerType) and node.op == '+':
+            if isinstance(right.type, ir.IntType) and right.type.width < 32:
+                right = self.builder.sext(right, ir.IntType(32))
             return self.builder.gep(left, [right], inbounds=True)
-        if isinstance(left.type, ir.PointerType) and node.op == '-':
+
+        # pointer - int -> pointer
+        if isinstance(left.type, ir.PointerType) and not isinstance(right.type, ir.PointerType) and node.op == '-':
+            if isinstance(right.type, ir.IntType) and right.type.width < 32:
+                right = self.builder.sext(right, ir.IntType(32))
             neg = self.builder.neg(right)
             return self.builder.gep(left, [neg], inbounds=True)
 
-        if isinstance(right.type, ir.PointerType) and node.op == '+':
+        # int + pointer -> pointer
+        if isinstance(right.type, ir.PointerType) and not isinstance(left.type, ir.PointerType) and node.op == '+':
+            if isinstance(left.type, ir.IntType) and left.type.width < 32:
+                left = self.builder.sext(left, ir.IntType(32))
             return self.builder.gep(right, [left], inbounds=True)
 
         # Pointer vergelijkingen
@@ -1046,18 +1096,33 @@ class LLVMGenerator:
 
     def visit_AddressOfNode(self, node: AddressOfNode):
         """
-        &x → geeft het adres (pointer) van x terug
-
-        C code:
-            int* ptr = &x;
-
-        LLVM:
-            %ptr = alloca i32*
-            store i32* %x, i32** %ptr
+        &x        -> pointer naar variabele x
+        &arr[i]   -> pointer naar array-element arr[i]
+        &*p       -> p
+        &s.member -> pointer naar struct member
+        &p->member -> pointer naar struct member via pointer
         """
-        # De pointer naar x zit al in onze symbol table
-        # Dat IS al het adres van x
-        return self.variables[node.operand.name]
+        operand = node.operand
+
+        # &x
+        if isinstance(operand, IdentifierNode):
+            return self.variables[operand.name]
+
+        # &arr[i]
+        if isinstance(operand, ArrayAccessNode):
+            return self._get_array_ptr(operand)
+
+        # &*p == p
+        if isinstance(operand, DereferenceNode):
+            return self.visit(operand.operand)
+
+        # &s.member / &p->member
+        if isinstance(operand, (MemberAccessNode, PointerMemberAccessNode)):
+            return self._get_member_ptr(operand)
+
+        raise NotImplementedError(
+            f"Address-of not supported for {type(operand).__name__}"
+        )
 
     def visit_DereferenceNode(self, node: DereferenceNode):
         """
